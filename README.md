@@ -1,8 +1,8 @@
 # Radial Processes in Generative Modeling
 
-Implementation accompanying the thesis [*Radial Processes in Generative Modeling*] by Simon Strebl, TU-Berlin. The code is based on the framework in the paper [*Adapting Noise to Data: Generative Flows from 1D Processes*](https://arxiv.org/abs/2510.12636). The code provides flow-matching baselines and quantile-enhanced models for 2‑D toy targets as well as radial models like the radial quantile model, SLERP. The MSGM model from the paper [*Multiplicative Diffusion Models: Beyond Gaussian Latents*] (https://openreview.net/forum?id=F6w8LcJJFA) was used for comparison.
+Implementation accompanying the thesis [*Radial Processes in Generative Modeling*] by Simon Strebl, TU-Berlin. The code is based on the framework in the paper [*Adapting Noise to Data: Generative Flows from 1D Processes*](https://arxiv.org/abs/2510.12636). The code provides flow-matching baselines for 2‑D toy targets as well as radial models like the radial quantile model, SLERP. The componentwise quantile model has to be used with the original code. The MSGM model from the paper [*Multiplicative Diffusion Models: Beyond Gaussian Latents*] (https://openreview.net/forum?id=F6w8LcJJFA) was implemented and used for comparison.
 
-![Learn-Noise 2-D target illustration](Adapting-Noise-main/images/2d-an.png)
+![SLERP model illustration](images/slerp_ot_slices.png)
 
 ## Installation
 
@@ -26,7 +26,6 @@ Ensure PyTorch is installed according to your system's CUDA version if GPU suppo
 ### 2‑D Targets
 ```bash
 python -m learn_noise.cli_2d --config default
-python -m learn_noise.cli_2d --config funnel
 ```
 
 ### Common Flags
@@ -34,6 +33,7 @@ python -m learn_noise.cli_2d --config funnel
 - `--pretrain`: run quantile pretraining before joint optimisation.
 - `--override key=value`: override any YAML config entry.
 - `--no-wandb`: disable Weights & Biases logging (disabled in configs by default).
+- `--msgm`: Overwrites all FM settings with the MSGM model.
 
 Default hyper-parameters are defined in the YAML configs under `learn_noise/configs/`.
 
