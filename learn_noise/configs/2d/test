@@ -1,0 +1,9 @@
+for i in {1..1}; do echo "Start Durchlauf mit Seed $i..."; python3 -m learn_noise.cli_2d --config default --device cpu --baseline --seed $i; done
+for i in {1..1}; do echo "Start Durchlauf mit Seed $i..."; python3 -m learn_noise.cli_2d --config default --device cpu --baseline --override noise_alignment=true --override --seed $i; done
+for i in {1..1}; do echo "Start Durchlauf mit Seed $i..."; python3 -m learn_noise.cli_2d --config funnel --device cpu --pretrain --seed $i; done
+for i in {1..1}; do echo "Start Durchlauf mit Seed $i..."; python3 -m learn_noise.cli_2d --config default --device cpu --baseline --override full_radius_matching=false --override use_minibatch_ot=true --override baseline_flow=linear --seed $i; done
+python3 -m learn_noise.cli_2d --config default --device cpu --baseline --msgm --msgm-steps 64 --seed 1
+
+
+
+
