@@ -104,8 +104,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quantile-checkpoint", type=str)
     parser.add_argument("--freeze-quantile", action="store_true")
     parser.add_argument("--use-minibatch-ot", action="store_true")
-    parser.add_argument("--full-radius-matching", action="store_true")
-    parser.add_argument("--noise-alignment", action="store_true")
+    parser.add_argument("--slerp", action="store_true")
+    parser.add_argument("--strat_ot", action="store_true")
     parser.add_argument("--baseline-flow", type=str, choices=["linear", "mmd", "kac"])
     parser.add_argument("--baseline-latent", type=str)
     parser.add_argument("--baseline-flow-T", type=float)
@@ -163,10 +163,10 @@ def main() -> None:
         overrides["freeze_quantile"] = True
     if cli_args.use_minibatch_ot:
         overrides["use_minibatch_ot"] = True
-    if cli_args.full_radius_matching:
-        overrides["full_radius_matching"] = True
-    if cli_args.noise_alignment:
-        overrides["noise_alignment"] = True
+    if cli_args.slerp:
+        overrides["slerp"] = True
+    if cli_args.strat_ot:
+        overrides["strat_ot"] = True
     if cli_args.baseline_flow is not None:
         overrides["baseline_flow"] = cli_args.baseline_flow
     if cli_args.baseline_latent is not None:
@@ -239,7 +239,8 @@ def main() -> None:
     # Bypass standard model creation if MSGM is active
     if not args.is_msgm:
         model = _build_model(args)
-        if args.full_radius_matching:
+        if args.slerp:
+            args.baseline_flow = "target_norm_emp"
             args.input_dim = args.dim
             model = _build_model(args)
             model = SphericalProjectedModel(model)
@@ -248,6 +249,9 @@ def main() -> None:
         # We will build the MSGM model inside train_fm_baseline!
         model = None 
         optimizer = None
+        args.slerp = False
+        args.strat_ot = False
+        args.baseline_flow = "target_norm_emp"
 
     if cli_args.pretrain:
         pretrain_cfg = dict(base_cfg)

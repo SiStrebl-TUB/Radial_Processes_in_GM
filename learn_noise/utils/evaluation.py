@@ -204,7 +204,7 @@ def heavy_eval_batched(
 
         x_T = eps 
 
-        if args.full_radius_matching:
+        if args.slerp:
             scale = torch.log1p(x_T.norm(dim=1, keepdim=True)) / (x_T.norm(dim=1, keepdim=True) + 1e-8)
             x_T_scaled = x_T * scale  # Logarithmische Skalierung der Start
             trajectory = spherical_ode_solver(ode_func, x_T_scaled, t_vals)

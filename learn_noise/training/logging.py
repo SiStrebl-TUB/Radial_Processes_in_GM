@@ -733,7 +733,7 @@ def log_baseline_evaluation(
                     ode_func,
                     noise=eps1,
                     T=1.0,
-                    radial_ode=args.full_radius_matching,
+                    radial_ode=args.slerp,
                     output_dir=args.runs_dir,
                     num_steps=50,
                     num_samples=2000,
@@ -750,7 +750,7 @@ def log_baseline_evaluation(
                 n_paths = min(5000, eps1.shape[0])
                 if n_paths > 0:
                     
-                    if args.full_radius_matching:
+                    if args.slerp:
                         noise = eps1[:n_paths]
                         scale = torch.log1p(noise.norm(dim=1, keepdim=True))/(noise.norm(dim=1, keepdim=True) + 1e-8)
                         noise = noise * scale  # Logarithmische Skalierung der Startpunkte
@@ -1126,7 +1126,7 @@ def log_quantile_low_dim_metrics(
                     ode_func,
                     noise=noise, #eps1
                     T=1.0,
-                    radial_ode=args.full_radius_matching,
+                    radial_ode=args.slerp,
                     output_dir=args.runs_dir,
                     num_steps=50,
                     num_samples=2000,

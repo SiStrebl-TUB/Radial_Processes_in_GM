@@ -1,7 +1,7 @@
 # Default joint-training configuration for 2D experiments.
 seed: 1
 device: cuda
-target_dataset: funnel # override via --override target_dataset=...
+target_dataset: ringgmm # override via --override target_dataset=...
 dim: 2
 hidden_size: 64
 hidden_layers: 3
@@ -9,15 +9,15 @@ time_embedding: sinusoidal
 concat_t_emb: true
 lr: 0.001
 batch_size: 128
-epochs: 150000 #-15000 für heavy tails
+epochs: 150000 #200000 für heavy tails
 model_grad_clip: 1.0
 ema: 0.999
 ema_start_step: 0
 
-noise_alignment: false
-use_minibatch_ot: false
-full_radius_matching: false
-baseline_flow: target_norm_emp #linear
+strat_ot: true 
+use_minibatch_ot: false #minibatch OT for linear FM models
+slerp: true
+baseline_flow: target_norm_emp #linear for linear FM models, target_norm_emp for spherical models
 
 baseline_latent: gaussian
 baseline_flow_T: 1.0

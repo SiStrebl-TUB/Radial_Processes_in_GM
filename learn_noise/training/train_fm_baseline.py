@@ -518,7 +518,7 @@ def train_fm_baseline(
     else:
         # --- YOUR ORIGINAL SETUP CODE GOES HERE ---
         ema = AveragedModel(model, multi_avg_fn=get_ema_multi_avg_fn(args.ema))
-        if args.full_radius_matching:
+        if args.slerp:
             ang_mode = AngularInferenceWrapper(ema)
             wrapper = TorchWrapper(ang_mode)
         else:
@@ -593,9 +593,9 @@ def train_fm_baseline(
 
     train_time_accumulator = 0.0
 
-    noise_alignment = getattr(args, "noise_alignment", False)
+    strat_ot = getattr(args, "strat_ot", False)
 
-    if noise_alignment:
+    if strat_ot:
         x_data = sampler.sample(args.batch_size * args.epochs, device=device, dtype=torch.float32)
         N = len(x_data)
         x_data = x_data * torch.log1p(x_data.norm(dim=1, keepdim=True))/(x_data.norm(dim=1, keepdim=True)+1e-8) 
@@ -995,7 +995,7 @@ def train_fm_baseline(
         model.train()
         optimizer.zero_grad(set_to_none=True)
         pairing_cost = None
-        if noise_alignment:
+        if strat_ot:
             x_0 = x_target_shuffled[start_idx:end_idx].to(device)#sampler.sample(args.batch_size, device=device, dtype=torch.float32)
         else:
             x_0 = sampler.sample(args.batch_size, device=device, dtype=torch.float32)
@@ -1079,10 +1079,10 @@ def train_fm_baseline(
                 g_deriv = 1.0
                 uni = torch.randn(size = (args.batch_size, args.dim), device = device)
                 uni = torch.nn.functional.normalize(uni)
-                # For full_radius_matching, use x_0 norms directly (no need for sampled_norm)
+                # For slerp, use x_0 norms directly (no need for sampled_norm)
 
                 # tuning down to log1p size
-                if not noise_alignment:
+                if not strat_ot:
                     uni = torch.randn(size = (args.batch_size, args.dim), device = device)
                     uni = torch.nn.functional.normalize(uni)
                     x_0_norm = torch.linalg.vector_norm(x_0, dim = 1).reshape(-1,1)
@@ -1100,7 +1100,7 @@ def train_fm_baseline(
                     #z = z[idx_best]
                     pairing_cost = transport_plan.max(dim=0).values.mean()
 
-                elif args.full_radius_matching:
+                elif args.slerp:
                     # Full radius matching: x_0 and noise are already perfectly aligned by construction
                     # (noise = x_0_norm * uni, so ||noise|| = ||x_0||)
                     # Compute angle omega between x_0 and noise using simplified formula
@@ -1119,7 +1119,7 @@ def train_fm_baseline(
 
                     # 2. Den VOLLEN, echten Weg berechnen (WICHTIG!)
                     p_chosen = 1
-                    if noise_alignment:
+                    if strat_ot:
                         p_chosen = 1
                     
                     f,g,f_deriv,g_deriv = get_slerp_warped(t, omega, p=p_chosen)
@@ -1141,7 +1141,7 @@ def train_fm_baseline(
 
             loss_mse_log_perSample = F.mse_loss(velocity_pred, velocity_target, reduction = 'none')
 
-            if args.full_radius_matching:
+            if args.slerp:
                 radius = x_t.detach().norm(dim=1, keepdim=True)
                 weight_radius = torch.expm1(radius)
                 dist_to_seam = torch.abs(x_t[:, 1:2]) 
@@ -1180,7 +1180,7 @@ def train_fm_baseline(
         
         ###################### EVAL 2D ######################
         if not is_image_task and (do_light or do_heavy):
-            if args.full_radius_matching:
+            if args.slerp:
                 plotting.plot_vector_field(model = ema, device = device, t = 0.0, path = args.runs_dir, step = step)
                 plotting.plot_vector_field(model = ema, device = device, t = 0.5, path = args.runs_dir, step = step)
                 plotting.plot_vector_field(model = ema, device = device, t = 0.9, path = args.runs_dir, step = step)
