@@ -9,7 +9,7 @@ time_embedding: sinusoidal
 concat_t_emb: true
 lr: 0.001
 batch_size: 128
-epochs: 1000 #200000 für heavy tails
+epochs: 100000 #200000 für heavy tails
 model_grad_clip: 1.0
 ema: 0.999
 ema_start_step: 0
