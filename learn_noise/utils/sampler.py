@@ -8,6 +8,13 @@ import numpy as np
 import torch
 from torch.special import i0e, i1e
 
+from pathlib import Path
+from typing import Optional
+from torch import Tensor
+import pandas as pd
+
+from sklearn.datasets import make_swiss_roll
+
 try:
     from torchvision import datasets, transforms
     from torch.utils.data import DataLoader
@@ -1815,9 +1822,235 @@ class InterpolatedNormSampler:
         sampled_norms = torch.exp(sampled_R) - self.epsilon
         
         return sampled_norms
+    
+
+# Stelle sicher, dass _as_device_dtype und BaseDistribution2D importiert/verfügbar sind.
+
+class MSGM_SwissRoll(BaseDistribution2D):
+    has_log_prob: bool = False
+
+    def __init__(self, noise: float = 0.5):
+        self.noise = noise
+
+    def to(self, device):
+        # SwissRoll speichert keine Tensoren im State, wir geben einfach self zurück
+        return self
+
+    def sample(
+        self,
+        n: int,
+        device: Optional[torch.device | str] = None,
+        dtype: Optional[torch.dtype] = None,
+    ) -> Tensor:
+        device, dtype = _as_device_dtype(device, dtype)
+        # Exakt die Logik aus MSGM:
+        data = make_swiss_roll(n, noise=self.noise)[0][:, [0, 2]].astype('float32') / 5.0
+        return torch.tensor(data, device=device, dtype=dtype)
+
+
+class MSGM_Gaussian(BaseDistribution2D):
+    has_log_prob: bool = True
+
+    def __init__(self, dim: int = 16, correlation: bool = True, normalized: bool = False, seed: int = 0):
+        self.dim = dim
+        
+        # WICHTIG: Um exakt denselben Datensatz wie MSGM zu generieren, MÜSSEN wir
+        # den RNG-Seed für die Erstellung der Matrix A fixieren (im MSGM-Skript ist es 0).
+        rng_state = torch.get_rng_state()
+        torch.manual_seed(seed)
+        
+        if correlation:
+            self.A = torch.randn(dim, dim)
+        else:
+            self.A = torch.eye(dim)
+            
+        cov = self.A @ self.A.T
+        self.std = torch.sqrt(torch.diag(cov))
+        
+        if normalized:
+            self.A = torch.diag(1.0 / self.std) @ self.A 
+            cov = self.A @ self.A.T
+            
+        # Seed wiederherstellen, damit das restliche Training nicht beeinflusst wird
+        torch.set_rng_state(rng_state)
+
+        # Für log_prob
+        self.cov = cov
+        self.mean = torch.zeros(dim)
+
+    def to(self, device):
+        device = torch.device(device)
+        self.A = self.A.to(device)
+        self.std = self.std.to(device)
+        self.cov = self.cov.to(device)
+        self.mean = self.mean.to(device)
+        return self
+        
+    def sample(
+        self,
+        n: int,
+        device: Optional[torch.device | str] = None,
+        dtype: Optional[torch.dtype] = None,
+    ) -> Tensor:
+        device, dtype = _as_device_dtype(device, dtype)
+        normal = torch.distributions.Normal(0.0, 1.0)
+        # Sample und Transformation (z @ A.T)
+        z = normal.sample((n, self.dim))
+        x = z @ self.A.T
+        return x.to(device=device, dtype=dtype)
+
+    def log_prob(self, x: Tensor) -> Tensor:
+        device, dtype = _as_device_dtype(x.device, x.dtype)
+        mvn = torch.distributions.MultivariateNormal(
+            loc=self.mean.to(device, dtype), 
+            covariance_matrix=self.cov.to(device, dtype)
+        )
+        return mvn.log_prob(x)
+
+
+class MSGM_Cauchy(BaseDistribution2D):
+    has_log_prob: bool = True
+
+    def __init__(self, dim: int = 4, correlation: bool = True, normalized: bool = False, seed: int = 0):
+        self.dim = dim
+        self.scale = 1.0 / 50.0
+        
+        # Gleiches Seed-Konzept wie beim Gaussian für strikte Reproduzierbarkeit
+        rng_state = torch.get_rng_state()
+        torch.manual_seed(seed)
+        
+        if correlation:
+            self.A = torch.randn(dim, dim)
+        else:
+            self.A = torch.eye(dim)
+            
+        cov = self.A @ self.A.T
+        self.std = torch.sqrt(torch.diag(cov))
+        
+        if normalized:
+            self.A = torch.diag(1.0 / self.std) @ self.A 
+            
+        torch.set_rng_state(rng_state)
+        
+        # Für log_prob (Determinante der Transformationsmatrix)
+        self.log_abs_det_A = torch.log(torch.abs(torch.det(self.A)))
+        self.A_inv_T = torch.inverse(self.A).T
+
+    def to(self, device):
+        device = torch.device(device)
+        self.A = self.A.to(device)
+        self.std = self.std.to(device)
+        self.log_abs_det_A = self.log_abs_det_A.to(device)
+        self.A_inv_T = self.A_inv_T.to(device)
+        return self
+
+    def sample(
+        self,
+        n: int,
+        device: Optional[torch.device | str] = None,
+        dtype: Optional[torch.dtype] = None,
+    ) -> Tensor:
+        device, dtype = _as_device_dtype(device, dtype)
+        cauchy = torch.distributions.Cauchy(0.0, self.scale)
+        z = cauchy.sample((n, self.dim))
+        x = z @ self.A.T
+        return x.to(device=device, dtype=dtype)
+
+    def log_prob(self, x: Tensor) -> Tensor:
+        # Transformation zurück in den unkorrelierten Z-Raum
+        device, dtype = _as_device_dtype(x.device, x.dtype)
+        A_inv_T = self.A_inv_T.to(device, dtype)
+        z = x @ A_inv_T
+        
+        # Log-Prob von unabhängigen Cauchy-Variablen
+        cauchy = torch.distributions.Cauchy(0.0, self.scale)
+        log_prob_z = cauchy.log_prob(z).sum(dim=-1)
+        
+        # Change of variables Korrektur
+        log_prob_x = log_prob_z - self.log_abs_det_A.to(device, dtype)
+        return log_prob_x
+    
+class MSGM_PIV(BaseDistribution2D):
+    has_log_prob: bool = False
+
+    def __init__(
+        self, 
+        dim: int = 1024, # Standardmäßig jetzt auf 1024!
+        normalized: bool = False
+    ):
+        self.normalized = normalized
+        self.name = 'PIV'
+        self.data_dir = Path(__file__).parent.parent.parent / "MSGM-submission-main" / "data" / "preprocessed_piv"
+        folder = Path(self.data_dir)
+            
+        if not folder.exists():
+            raise FileNotFoundError(f"Vorverarbeiteter PIV Ordner nicht gefunden: {folder}. Lass zuerst preprocess_piv.py laufen!")
+
+        print(f"Loading preprocessed PIV data from: {folder}")
+
+        # 1. Daten in Millisekunden laden! 
+        # Keine for-Schleifen oder Splittings mehr nötig, das haben wir schon erledigt.
+        train_data = np.load(folder / "piv_train.npy")
+        test_data = np.load(folder / "piv_test.npy")
+        self.std = np.load(folder / "piv_std.npy")
+        
+        # Zur Sicherheit überschreiben wir self.dim mit der echten Form der Daten (z.B. 1024)
+        self.dim = train_data.shape[1]
+
+        # 2. Normalisieren (falls gewünscht)
+        if normalized:
+            train_data = train_data / self.std
+            test_data = test_data / self.std
+            self.name += '_norm'
+
+        # 3. Als PyTorch Tensoren im RAM speichern (viel effizienter für .sample())
+        self.data = torch.from_numpy(train_data).to(torch.float32)
+        self.data_test = torch.from_numpy(test_data).to(torch.float32)
+        self.std_tensor = torch.from_numpy(self.std).to(torch.float32)
+
+    def to(self, device):
+        device = torch.device(device)
+        self.data = self.data.to(device)
+        self.data_test = self.data_test.to(device)
+        self.std_tensor = self.std_tensor.to(device)
+        return self
+
+    def sample(
+        self,
+        n: int,
+        device: Optional[torch.device | str] = None,
+        dtype: Optional[torch.dtype] = None,
+    ) -> Tensor:
+        device, dtype = _as_device_dtype(device, dtype)
+        
+        # Zufällige Indizes ziehen und entsprechende Datenpunkte zurückgeben
+        idx = torch.randint(0, self.data.shape[0], (n,))
+        x = self.data[idx]
+        
+        return x.to(device=device, dtype=dtype)
+        
+    def sampletest(
+        self, 
+        n: int, 
+        device: Optional[torch.device | str] = None,
+        dtype: Optional[torch.dtype] = None
+    ) -> Tensor:
+        """Zusätzliche Methode für Inferenz/Evaluierung auf Testdaten."""
+        device, dtype = _as_device_dtype(device, dtype)
+        idx = torch.randint(0, self.data_test.shape[0], (n,))
+        x = self.data_test[idx]
+        return x.to(device=device, dtype=dtype)
 
 def get_distribution(name: str, **kwargs):
     name = name.lower()
+    if name in {"msgm_swissroll", "msgm-swissroll"}:
+        return MSGM_SwissRoll(**kwargs)
+    if name in {"msgm_gaussian", "msgm-gaussian"}:
+        return MSGM_Gaussian(**kwargs)
+    if name in {"msgm_cauchy", "msgm-cauchy"}:
+        return MSGM_Cauchy(**kwargs)
+    if name in {"msgm_piv", "msgm-piv"}:
+        return MSGM_PIV(**kwargs)
     if name in {"thinangles", "thin-angles", "thin-arc"}:
         return ThinAngles(**kwargs)
     if name in {"radialpareto", "radial-pareto"}:

@@ -366,7 +366,7 @@ def pretrain_quantile(args, *, log_step_offset: int = 0) -> Tuple[nn.Module, str
     B= batch_size
     D = args.dim
     quantile_history = {}
-    target_steps = [50000]
+    target_steps = [49999]
     for step in tqdm(range(total_steps), desc="Quantile training (ot)"):
         quantile.train()
         opt.zero_grad(set_to_none=True)
@@ -394,6 +394,7 @@ def pretrain_quantile(args, *, log_step_offset: int = 0) -> Tuple[nn.Module, str
 
         
         if step in target_steps:
+            print(f"Logging quantile function and 2D latent space at step {step} (global step {global_step})...")
             import matplotlib.colors as mcolors
             # --- THEMA EINSTELLUNGEN: Für einen echten LaTeX-Look ---
             plt.rcParams['mathtext.fontset'] = 'cm'

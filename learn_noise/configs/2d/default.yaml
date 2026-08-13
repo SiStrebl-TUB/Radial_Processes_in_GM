@@ -1,7 +1,7 @@
 # Default joint-training configuration for 2D experiments.
 seed: 1
 device: cuda
-target_dataset: ringgmm # override via --override target_dataset=...
+target_dataset: funnel # override via --override target_dataset=...
 dim: 2
 hidden_size: 64
 hidden_layers: 3
@@ -14,10 +14,10 @@ model_grad_clip: 1.0
 ema: 0.999
 ema_start_step: 0
 
-strat_ot: true 
-use_minibatch_ot: false #minibatch OT for linear FM models
-slerp: true
-baseline_flow: target_norm_emp #linear for linear FM models, target_norm_emp for spherical models
+strat_ot: false 
+use_minibatch_ot: true #minibatch OT for linear FM models
+slerp: false
+baseline_flow: linear #linear for linear FM models, target_norm_emp for spherical models
 
 baseline_latent: gaussian
 baseline_flow_T: 1.0
@@ -32,12 +32,12 @@ freeze_quantile: false
 eval_step: 10000
 eval_sample: 20000
 eval_batch: 10000
-big_eval_samples: 100000
+big_eval_samples: 1000000
 big_eval_step: 50000
 num_steps_eval: 100
 name: null
 mode: fm_and_quantile
-q_ntrain: 20000
+q_ntrain: 50000
 q_batch: 256
 q_u_eps: 1.0e-10
 q_lr: 2.0e-4
@@ -52,8 +52,8 @@ q_ot_epsilon: 1.0
 q_objective: plan_action
 lambda_reg: 0.0
 metric: ot
-q_rqs_bins: 16
-q_rqs_bound: 5.0
+q_rqs_bins: 32
+q_rqs_bound: 500.0
 q_rqs_layers: 3
 image_shape: null
 runs_dir: null

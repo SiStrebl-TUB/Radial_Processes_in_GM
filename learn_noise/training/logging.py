@@ -607,7 +607,7 @@ def _render_trajectory_panel(
     outlier_set = set(outlier_indices) if outlier_indices is not None else set()
 
     # --- trajectories ---
-    line_kwargs_normal = dict(color=COL_PATH, alpha=0.35, linewidth=1.0, solid_capstyle="round", zorder=1)
+    line_kwargs_normal = dict(color=COL_PATH, alpha=0.6, linewidth=1.5, solid_capstyle="round", zorder=1)
     line_kwargs_outlier = line_kwargs_normal#dict(color=COL_PATH_OUTLIER, alpha=0.65, linewidth=1.5, solid_capstyle="round", zorder=2)
     
     for idx in range(starts.shape[0]):
@@ -619,13 +619,13 @@ def _render_trajectory_panel(
     # --- start/end points ---
     ax.scatter(
         starts[:, 0], starts[:, 1],
-        s=14, c=COL_START, alpha=0.9, edgecolors="none",
+        s=16, c=COL_START, alpha=0.9, edgecolors="none",
         # label='start (τ=1)',
         zorder=3,
     )
     ax.scatter(
         ends[:, 0], ends[:, 1],
-        s=18, c=COL_END, alpha=0.7, edgecolors="none",
+        s=20, c=COL_END, alpha=0.7, edgecolors="none",
         # label='end (τ=0)',
         zorder=4,
     )

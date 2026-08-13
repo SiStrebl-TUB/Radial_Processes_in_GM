@@ -321,8 +321,20 @@ def train_fm_baseline(
         latent_sampler_eval = _latent_eval
 
     elif flow_type in {"target_norm_emp", "target_norm_interp"}:
-        sampler = sampler.to(device) # Ensure the sampler's internal parameters are on GPU
-        training_data = sampler.sample(5000000, device=device, dtype=torch.float32)
+        sampler = sampler.to(device)
+        
+        # --- DER FIX ---
+        # Wenn der Sampler echte Daten im RAM hat (wie unser PIV), nimm einfach alle.
+        # Wenn nicht (wie Swiss Roll), reichen 50.000 Samples für eine perfekte Verteilung.
+        if hasattr(sampler, 'data'):
+            n_eval_samples = sampler.data.shape[0] # Das sind dann deine ~665 echten PIV-Felder
+        else:
+            n_eval_samples = 25000 
+            
+        print(f"Sampling {n_eval_samples} points for target norm estimation...")
+        
+        training_data = sampler.sample(n_eval_samples, device=device, dtype=torch.float32)
+        
         print(f"X Min: {training_data[:, 0].min():.4f}, X Max: {training_data[:, 0].max():.4f}")
         print(f"Y Min: {training_data[:, 1].min():.4f}, Y Max: {training_data[:, 1].max():.4f}")
         """plot_neals_funnel(
@@ -553,7 +565,13 @@ def train_fm_baseline(
     x0_fixed = args._fixed_baseline_x0
 
     image_shape = getattr(args, "image_shape", None)
+
+    image_shape = np.array([32,32])
+
     image_dim = math.prod(image_shape) if image_shape is not None else None
+
+
+
     is_image_task = image_shape is not None and image_dim == args.dim
 
 
