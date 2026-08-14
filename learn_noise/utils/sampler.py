@@ -14,6 +14,7 @@ from torch import Tensor
 import pandas as pd
 
 from sklearn.datasets import make_swiss_roll
+from scipy.ndimage import gaussian_filter
 
 try:
     from torchvision import datasets, transforms
