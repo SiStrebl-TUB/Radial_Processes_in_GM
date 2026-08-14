@@ -7,6 +7,7 @@ from torch import nn
 from torch.nn import functional as F
 from torch.nn.utils import spectral_norm
 from types import SimpleNamespace
+from typing import Optional
 
 
 class SinusoidalEmbedding(nn.Module):
