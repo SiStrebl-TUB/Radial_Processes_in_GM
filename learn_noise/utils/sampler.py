@@ -1975,35 +1975,70 @@ class MSGM_PIV(BaseDistribution2D):
 
     def __init__(
         self, 
-        dim: int = 1024, # Standardmäßig jetzt auf 1024!
+        dim: int = 1024, 
         normalized: bool = False
     ):
         self.normalized = normalized
         self.name = 'PIV'
-        self.data_dir = Path(__file__).parent.parent.parent / "MSGM-submission-main" / "data" / "preprocessed_piv"
-        folder = Path(self.data_dir)
-            
-        if not folder.exists():
-            raise FileNotFoundError(f"Vorverarbeiteter PIV Ordner nicht gefunden: {folder}. Lass zuerst preprocess_piv.py laufen!")
-
-        print(f"Loading preprocessed PIV data from: {folder}")
-
-        # 1. Daten in Millisekunden laden! 
-        # Keine for-Schleifen oder Splittings mehr nötig, das haben wir schon erledigt.
-        train_data = np.load(folder / "piv_train.npy")
-        test_data = np.load(folder / "piv_test.npy")
-        self.std = np.load(folder / "piv_std.npy")
         
-        # Zur Sicherheit überschreiben wir self.dim mit der echten Form der Daten (z.B. 1024)
-        self.dim = train_data.shape[1]
+        # Pfad zum "largerImage" Ordner anpassen!
+        self.data_dir = Path(__file__).parent.parent.parent / "MSGM-submission-main" / "data" / "largerImage"
+            
+        if not self.data_dir.exists():
+            raise FileNotFoundError(f"Daten-Ordner nicht gefunden: {self.data_dir}")
 
-        # 2. Normalisieren (falls gewünscht)
+        print(f"Loading authors' raw PIV data from: {self.data_dir}")
+
+        # 1. Daten laden und stapeln -> (Samples, 8192)
+        files = sorted(self.data_dir.glob("*_vortdiv.npy"))
+        if not files:
+            raise FileNotFoundError(f"Keine *_vortdiv.npy Dateien in {self.data_dir} gefunden!")
+        raw_data = np.vstack([np.load(f) for f in files])
+
+        # 2. Skalieren und Zentrieren
+        raw_data = raw_data / 2.5
+        raw_data = raw_data - raw_data.mean(axis=0)
+
+        # 3. Reshape, Smoothing (2) und Subsampling auf 32x32
+        npixelx_max = 64
+        npixelx = int(np.sqrt(dim)) # 32
+        
+        # Umformen auf (Samples, 64, 64, 2) und Kanal 0 (Vorticity) extrahieren
+        raw_data = raw_data.reshape((raw_data.shape[0], npixelx_max, npixelx_max, 2), order='F')
+        raw_data = raw_data[:, :, :, 0]
+
+        # Gauß-Filter (smoothing=2 Logik der Autoren)
+        sigmax = npixelx_max // npixelx  # 64 // 32 = 2
+        raw_data *= 4.0
+        for i in range(raw_data.shape[0]):
+            raw_data[i, :, :] = gaussian_filter(raw_data[i, :, :], sigma=sigmax)
+
+        # Räumliches Subsampling
+        ix = np.linspace(0, raw_data.shape[1]-1, npixelx, dtype=int)
+        iy = np.linspace(0, raw_data.shape[2]-1, npixelx, dtype=int)
+        raw_data = raw_data[:, ix, :]
+        raw_data = raw_data[:, :, iy]
+
+        # Flachklopfen auf Ziel-Dimension 1024
+        raw_data = raw_data.reshape((raw_data.shape[0], dim), order='F')
+
+        self.dim = raw_data.shape[1]
+
+        # 4. Train / Test Split (1/3 für Test)
+        n_test = raw_data.shape[0] // 3
+        train_data = raw_data[0:-n_test, :]
+        test_data = raw_data[-n_test:, :]
+        
+        # 5. Standardabweichung auf gesamtem Dataset (wie Autoren)
+        self.std = raw_data.std(axis=0)
+
+        # Normalisieren
         if normalized:
-            train_data = train_data / self.std
-            test_data = test_data / self.std
+            train_data = train_data / (self.std + 1e-8)
+            test_data = test_data / (self.std + 1e-8)
             self.name += '_norm'
 
-        # 3. Als PyTorch Tensoren im RAM speichern (viel effizienter für .sample())
+        # 6. Als PyTorch Tensoren im RAM speichern
         self.data = torch.from_numpy(train_data).to(torch.float32)
         self.data_test = torch.from_numpy(test_data).to(torch.float32)
         self.std_tensor = torch.from_numpy(self.std).to(torch.float32)
@@ -2022,11 +2057,8 @@ class MSGM_PIV(BaseDistribution2D):
         dtype: Optional[torch.dtype] = None,
     ) -> Tensor:
         device, dtype = _as_device_dtype(device, dtype)
-        
-        # Zufällige Indizes ziehen und entsprechende Datenpunkte zurückgeben
         idx = torch.randint(0, self.data.shape[0], (n,))
         x = self.data[idx]
-        
         return x.to(device=device, dtype=dtype)
         
     def sampletest(
@@ -2035,7 +2067,6 @@ class MSGM_PIV(BaseDistribution2D):
         device: Optional[torch.device | str] = None,
         dtype: Optional[torch.dtype] = None
     ) -> Tensor:
-        """Zusätzliche Methode für Inferenz/Evaluierung auf Testdaten."""
         device, dtype = _as_device_dtype(device, dtype)
         idx = torch.randint(0, self.data_test.shape[0], (n,))
         x = self.data_test[idx]

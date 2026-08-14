@@ -328,8 +328,10 @@ def train_fm_baseline(
         # Wenn nicht (wie Swiss Roll), reichen 50.000 Samples für eine perfekte Verteilung.
         if hasattr(sampler, 'data'):
             n_eval_samples = sampler.data.shape[0] # Das sind dann deine ~665 echten PIV-Felder
+            print(f"[baseline] Sampler has {n_eval_samples} real samples in RAM. Using all for norm estimation.")
         else:
             n_eval_samples = 25000 
+            print(f"[baseline] Sampler does not have real samples in RAM. Using {n_eval_samples} samples for norm estimation.")
             
         print(f"Sampling {n_eval_samples} points for target norm estimation...")
         

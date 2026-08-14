@@ -13,47 +13,99 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from pathlib import Path
 import random
 
+from scipy.ndimage import gaussian_filter
+
 class PIV:
-    def __init__(self, dim=1024, normalized=False, localized=False, few_data=False, ntrain_max=np.inf):
+    def __init__(self, dim=1024, normalized=False, localized=False, largeImage=True, smoothing=2, few_data=False, ntrain_max=np.inf):
         self.dim = dim
-        self.name = 'PIV'
-        self.name += str(self.dim)
+        self.name = 'PIV' + str(self.dim)
         
-        # Namensgebung beibehalten, damit die MSGM Speicher-Ordner richtig benannt werden
-        if localized:
+        if largeImage:
+            self.name += 'largeIm'
+            if smoothing == 1:
+                self.name += 'smooth'
+            if smoothing == 2:
+                self.name += 'superSmooth'
+            localized = True
+            npixelx = int(np.sqrt(dim))  # 32
+        elif localized:
             self.name += 'loc'
+            
         if few_data:
             self.name += str(ntrain_max) + 'pts'
         if normalized:
             self.name += '_norm'
 
-        # NEU: Wir zeigen auf DEINEN preprocessed Ordner
-        folder = Path("data/preprocessed_piv")
+        # Zeige auf den "largerImage" Ordner mit den Original-Dateien der Autoren
+        folder = Path(__file__).parent.parent / "data" / "largerImage" # Pfad evtl. anpassen!
         
         if not folder.exists():
-            raise FileNotFoundError(f"Präprozessierte PIV Daten nicht gefunden in: {folder}. Lass zuerst preprocess_piv.py laufen!")
+            raise FileNotFoundError(f"Original-Datenordner nicht gefunden: {folder}")
 
-        print("Loading fast preprocessed PIV data from:", folder)
-        
-        # Blitzschnelles Laden der NPY-Dateien
-        train_data = np.load(folder / "piv_train.npy")
-        test_data = np.load(folder / "piv_test.npy")
-        self.std = np.load(folder / "piv_std.npy")
+        print(f"Loading authors' raw PIV data from: {folder}")
 
-        # Zurechtschneiden, falls dim nicht exakt 1024 ist (z.B. für kleinere Tests)
-        self.npdata = train_data[:, :self.dim]
-        self.npdatatest = test_data[:, :self.dim]
-        self.std = self.std[:self.dim]
+        # 1. Alle Einzeldateien laden und stapeln -> Form (Samples, 8192)
+        files = sorted(folder.glob("*_vortdiv.npy"))
+        if not files:
+            raise FileNotFoundError(f"Keine _vortdiv.npy Dateien in {folder} gefunden!")
+            
+        npdata = np.vstack([np.load(f) for f in files])
 
-        # Normalisierung (Z-Score)
-        if normalized:
-            # Wichtig: Kleine Epsilon-Addition, falls std exakt 0 ist, um Division durch Null zu vermeiden
-            self.npdata = self.npdata / (self.std + 1e-8)
-            self.npdatatest = self.npdatatest / (self.std + 1e-8)
+        # 2. Skalieren und Zentrieren (wie Autoren)
+        npdata = npdata / 2.5
+        npdata = npdata - npdata.mean(axis=0)
 
-        # Attribute beibehalten, die das MSGM Skript eventuell abfragt
+        # 3. Reshape in 64x64 Gitter & Vorticity extrahieren
+        npixelx_max = 64
+        if largeImage:
+            # WICHTIG: order='F' ist zwingend nötig, da DaVis/Matlab so exportiert!
+            npdata = npdata.reshape((npdata.shape[0], npixelx_max, npixelx_max, 2), order='F')
+            npdata = npdata[:, :, :, 0] # Nur Vorticity behalten -> Form (Samples, 64, 64)
+
+            # 4. Smoothing (Smoothing=2 aus der Config)
+            if smoothing > 0:
+                print("Filtering images (Smoothing)...")
+                if smoothing == 1:
+                    sigmax = npdata.shape[1] // (3 * npixelx)
+                elif smoothing == 2:
+                    sigmax = npdata.shape[1] // npixelx
+                    npdata *= 4  # Autoren-Multiplikator
+                
+                for i in range(npdata.shape[0]):
+                    npdata[i, :, :] = gaussian_filter(npdata[i, :, :], sigma=sigmax)
+
+            # 5. Subsampling auf Ziel-Dimension (z.B. 32x32 = 1024)
+            print("Subsampling images to match required dimension...")
+            ix = np.linspace(0, npdata.shape[1]-1, npixelx, dtype=int)
+            iy = np.linspace(0, npdata.shape[2]-1, npixelx, dtype=int)
+            npdata = npdata[:, ix, :]
+            npdata = npdata[:, :, iy]
+
+            # Wieder flachklopfen -> Form (Samples, 1024)
+            npdata = npdata.reshape((npdata.shape[0], dim), order='F')
+        else:
+            npdata = npdata[:, 0:self.dim]
+
+        # 6. Train/Test Split (exakt wie Autoren: n_test = 1/3)
+        if few_data:
+            n_train = min([2 * npdata.shape[0] // 3, ntrain_max])
+            n_test = npdata.shape[0] - n_train 
+        else:
+            n_test = npdata.shape[0] // 3
+
+        # Slice-Notation der Autoren
+        self.npdata = npdata[0:-n_test, :]
+        self.npdatatest = npdata[-n_test:, :]
+
         self.max_nsamples = self.npdata.shape[0]
         self.max_nsamplestest = self.npdatatest.shape[0]
+
+        # 7. Standardabweichung berechnen und ggf. normalisieren
+        self.std = npdata.std(axis=0)
+        if normalized:
+            # + 1e-8 um Division durch 0 zu vermeiden (sicherer als Original)
+            self.npdata = self.npdata / (self.std + 1e-8)
+            self.npdatatest = self.npdatatest / (self.std + 1e-8)
 
     def sample(self, n):               
         idx = np.random.randint(0, self.npdata.shape[0], size=n) 
