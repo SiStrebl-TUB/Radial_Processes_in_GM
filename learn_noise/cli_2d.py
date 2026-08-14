@@ -37,6 +37,7 @@ def _build_model(args: SimpleNamespace) -> torch.nn.Module:
             input_emb='sinusoidal',
             concat_t_emb=bool(args.concat_t_emb),
         )
+        print("built model on device: ", args.device)
     return model.to(torch.device(args.device))
 
 

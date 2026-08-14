@@ -492,7 +492,7 @@ if __name__ == '__main__':
                                 fm_model = _build_model(args)
                                 print(f"Flow Matching Modell gebaut: {fm_model}")
                                 # 3. EMA Gewichte laden (ema_step_150000.pt)
-                                checkpoint = torch.load("ema_step_001000.pt", map_location=device)
+                                checkpoint = torch.load("ema_test.pt", map_location=device)
                                 state_dict = checkpoint.get("state_dict", checkpoint)
                                 
                                 cleaned_state_dict = {}
