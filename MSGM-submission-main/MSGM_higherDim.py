@@ -356,6 +356,11 @@ if __name__ == '__main__':
 
                     with torch.no_grad():
                         xtest = sampler.sampletest(num_samples)
+                        print("\n=== DATA SHAPE CHECK ===")
+                        print("Gesamter Test-Datensatz (xtest.shape):", xtest.shape)
+                        print("Form eines einzelnen Samples (xtest[0].shape):", xtest[0].shape)
+                        print("Anzahl der Elemente in einem Sample (sampler.dim):", sampler.dim)
+                        print("========================\n")
                         sampler.dim = xtest.shape[1]
                         std_test = xtest.std(axis=0)
                         if normalized_data:
