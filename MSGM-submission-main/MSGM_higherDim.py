@@ -61,7 +61,7 @@ print_every = 10000
 
 # Inference
 include_t0_reverse = True # for plots
-num_samples = 10000
+num_samples = 1000
 max_num_samples_for_mmd = num_samples
 evalmmmd = True
 first_run = True
@@ -654,6 +654,8 @@ if __name__ == '__main__':
                                             del x_0
                                             if (save_results):
                                                 torch.save(xs, name_simu + ".pt")
+                                        print("SHAPE VON XTEST:", xtest.shape)
+                                        print("SHAPE VON XGEN:", xs[-1,:,:].shape)
                                         postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run, MSGM, sampler, \
                                                         xs, xtest, std_norm, std_test_plot, datatype, name_simu, dimplot, \
                                                         crop_data_plot, plot_crop, plot_xlim, plot_ref_pdf, \
