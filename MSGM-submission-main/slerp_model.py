@@ -6,6 +6,7 @@ from einops import rearrange
 from torch import nn
 from torch.nn import functional as F
 from torch.nn.utils import spectral_norm
+from types import SimpleNamespace
 
 
 class SinusoidalEmbedding(nn.Module):
