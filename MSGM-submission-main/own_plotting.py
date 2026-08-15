@@ -420,6 +420,13 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     xtest = xtest.to(device)
     xgen = xs[-1, :, :].to(device)
 
+    # === SANITY CHECK: Wie sieht das echte Testbild aus? ===
+    test_image = xtest[0].detach().cpu().numpy().reshape((32, 32), order='F')
+    plots_vort(test_image, vmin=-2, vmax=2)
+    plt.savefig(name_simu + "_DEBUG_TrueTestImage.png")
+    plt.close('all')
+    # ========================================================
+
     if save_results and not justLoad:
         np.save(name_simu + ".npy", xgen.clone().detach().cpu().numpy())
 
