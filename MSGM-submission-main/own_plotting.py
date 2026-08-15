@@ -462,7 +462,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
             dist_train_to_test = compute_mmd(std_norm_t * x_mmd1, std_norm_t * xtest_baseline_sub)
             
             # 4. MMD Berechnung (Dein Modell vs. echte Testdaten von Seed 0)
-            dist_gen_to_test = compute_mmd(std_norm_t * xgen_sub, std_norm_t * xtest_sub)
+            dist_gen_to_test = compute_mmd(std_norm_t * xgen_sub, std_norm_t * xtest_baseline_sub)
 
         # Device-sicher abspeichern für die Baseline
         val_to_save = dist_train_to_test.item() if isinstance(mmd_ref, np.ndarray) else dist_train_to_test
