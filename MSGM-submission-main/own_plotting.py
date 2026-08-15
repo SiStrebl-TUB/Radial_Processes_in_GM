@@ -423,8 +423,16 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     # === SANITY CHECK: Wie sieht das echte Testbild aus? ===
     test_image = xtest[0].detach().cpu().numpy().reshape((32, 32), order='F')
     plots_vort(test_image, vmin=-2, vmax=2)
-    plt.savefig(name_simu + "_DEBUG_TrueTestImage.png")
+    
+    # Speichere es explizit als feste Datei im aktuellen Verzeichnis
+    debug_path = os.path.abspath("DEBUG_TrueTestImage.png")
+    plt.savefig(debug_path)
     plt.close('all')
+    
+    # Drucke den exakten Pfad in die Konsole
+    print("*" * 50)
+    print(f"!!! ACHTUNG !!! Das Debug-Bild liegt exakt hier:\n{debug_path}")
+    print("*" * 50)
     # ========================================================
 
     if save_results and not justLoad:
