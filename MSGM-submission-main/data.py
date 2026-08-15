@@ -37,7 +37,7 @@ class PIV:
             self.name += '_norm'
 
         # Zeige auf den "largerImage" Ordner mit den Original-Dateien der Autoren
-        folder = Path(__file__).parent.parent / "data" / "largerImage" # Pfad evtl. anpassen!
+        folder = Path(__file__).parent / "data" / "largerImage" # Pfad evtl. anpassen!
         
         if not folder.exists():
             raise FileNotFoundError(f"Original-Datenordner nicht gefunden: {folder}")
