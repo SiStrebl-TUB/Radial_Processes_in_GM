@@ -24,10 +24,10 @@ def compute_kernel(x, y):
     with torch.no_grad():
         dim = float(x.size(1))
         
-        # torch.cdist berechnet exakt die quadratische Distanz, 
-        # ohne den RAM-fressenden 3D-Tensor aufzubauen.
-        # Geteilt durch 'dim' entspricht es haargenau dem .mean(2) der Autoren.
-        kernel_input = torch.cdist(x, y, p=2.0).pow(2) / dim
+        # torch.cdist berechnet die Summe der quadratischen Distanzen.
+        # Um die exakte Mathematik der Autoren (.mean(2) / dim) zu matchen,
+        # müssen wir durch (dim * dim) teilen!
+        kernel_input = torch.cdist(x, y, p=2.0).pow(2) / (dim * dim)
         
         result = torch.exp(-kernel_input)
         
