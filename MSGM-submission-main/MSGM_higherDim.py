@@ -61,7 +61,7 @@ print_every = 10000
 
 # Inference
 include_t0_reverse = True # for plots
-num_samples = 10000
+num_samples = 1000
 max_num_samples_for_mmd = num_samples
 evalmmmd = True
 first_run = True
@@ -111,7 +111,7 @@ evalmmmd = True
 # beta_max=1
 MSGMs = [1]
 
-batch_sizes = [256]
+batch_sizes = [128]
 
 # Dataset
 datatype = 'PIV'
