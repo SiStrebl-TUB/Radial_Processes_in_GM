@@ -437,6 +437,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     # MMD
     if evalmmmd and not justLoadmmmd:
         num_samples_for_mmd = min([xtest.shape[0], max_num_samples_for_mmd])
+        print(f"Evaluating MMD with {num_samples_for_mmd} samples (max_num_samples_for_mmd={max_num_samples_for_mmd})")
         xtest_sub = xtest[0:num_samples_for_mmd-1, :]
         xgen_sub = xgen[0:num_samples_for_mmd-1, :]
         
@@ -445,7 +446,9 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         with torch.no_grad():
             x_mmd1 = sampler.sample(xtest_sub.shape[0]).to(device)
             dist_train_to_test = compute_mmd(std_norm_t * x_mmd1, std_norm_t * xtest_sub)
+            print(f"{x_mmd1.shape[0]} samples for MMD train to test with std_norm_t: {std_norm_t}")
             dist = compute_mmd(std_norm_t * xgen_sub, std_norm_t * xtest_sub)
+            print(f"{xgen_sub.shape[0]} samples for MMD gen to test with std_norm_t: {std_norm_t}")
 
         # Device-sicher abspeichern (funktioniert für Torch-Tensoren & NumPy Arrays)
         val_to_save = dist_train_to_test.item() if isinstance(mmd_ref, np.ndarray) else dist_train_to_test
