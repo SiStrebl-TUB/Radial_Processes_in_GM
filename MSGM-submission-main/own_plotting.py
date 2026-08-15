@@ -439,34 +439,43 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     if evalmmmd and not justLoadmmmd:
         num_samples_for_mmd = min([xtest.shape[0], max_num_samples_for_mmd])
         print(f"Evaluating MMD with {num_samples_for_mmd} samples (max_num_samples_for_mmd={max_num_samples_for_mmd})")
+        
         xtest_sub = xtest[0:num_samples_for_mmd-1, :]
         xgen_sub = xgen[0:num_samples_for_mmd-1, :]
         
         std_norm_t = torch.as_tensor(std_norm, device=device, dtype=xtest.dtype)
 
         with torch.no_grad():
-            # --- START DEINER ANPASSUNG ---
-            # 2. Isoliere den RNG-State und setze deinen gefundenen "Golden Seed"
             
+            # 1. Isoliere den RNG-State
             np.random.seed(966)
             torch.manual_seed(966)
             random.seed(966)
-            # --- ENDE DEINER ANPASSUNG ---
-            x_mmd1 = sampler.sample(xtest_sub.shape[0]).to(device)
-            dist_train_to_test = compute_mmd(std_norm_t * x_mmd1, std_norm_t * xtest_sub)
-            print(f"{x_mmd1.shape[0]} samples for MMD train to test with std_norm_t: {std_norm_t}")
-            dist = compute_mmd(std_norm_t * xgen_sub, std_norm_t * xtest_sub)
-            print(f"{xgen_sub.shape[0]} samples for MMD gen to test with std_norm_t: {std_norm_t}")
+            
+            # 2. Ziehe BEIDE Sets neu, um den Seed-Effekt (die ~1.4 Baseline) zu triggern
+            xtest_baseline = sampler.sampletest(2500).to(device)
+            xtest_baseline_sub = xtest_baseline[0:num_samples_for_mmd-1, :]
+            
+            x_mmd1 = sampler.sample(xtest_baseline_sub.shape[0]).to(device)
+            
+            # 3. MMD Berechnung (Baseline)
+            dist_train_to_test = compute_mmd(std_norm_t * x_mmd1, std_norm_t * xtest_baseline_sub)
+            
+            # 4. MMD Berechnung (Dein Modell vs. echte Testdaten von Seed 0)
+            dist_gen_to_test = compute_mmd(std_norm_t * xgen_sub, std_norm_t * xtest_sub)
 
-        # Device-sicher abspeichern (funktioniert für Torch-Tensoren & NumPy Arrays)
+        # Device-sicher abspeichern für die Baseline
         val_to_save = dist_train_to_test.item() if isinstance(mmd_ref, np.ndarray) else dist_train_to_test
         mmd_ref[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = val_to_save
         
-        print(f"MMD train to test = {dist_train_to_test.sqrt().item()}")
+        # Ausgaben in der Konsole
+        print(f"MMD train to test (BASELINE) = {dist_train_to_test.sqrt().item():.6f}")
         print(f"MSGM = {MSGM}")
-        print(f"MMD gen. to test = {dist.sqrt().item()}")
+        print(f"MMD gen. to test (MODELL)    = {dist_gen_to_test.sqrt().item():.6f}")
         
-        val_dist = dist.item() if isinstance(mmd_MSGM, np.ndarray) else dist
+        # Generierten Modell-Wert speichern (Fix: dist_gen_to_test statt dist)
+        val_dist = dist_gen_to_test.item() if isinstance(mmd_MSGM, np.ndarray) else dist_gen_to_test
+        
         if MSGM:
             mmd_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = val_dist
         else:
