@@ -17,6 +17,7 @@ import seaborn as sns
 import matplotlib.ticker as mticker 
 import pandas as pd
 from quantitative_comparison import compute_mmd
+import random
 
 ### 4.1. Define plotting tools
 @torch.no_grad()
@@ -446,8 +447,6 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         with torch.no_grad():
             # --- START DEINER ANPASSUNG ---
             # 2. Isoliere den RNG-State und setze deinen gefundenen "Golden Seed"
-            import numpy as np
-            import random
             
             np.random.seed(966)
             torch.manual_seed(966)
