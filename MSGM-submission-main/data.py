@@ -1,5 +1,3 @@
-
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -9,14 +7,17 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.datasets import make_swiss_roll
 from netCDF4 import Dataset
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from pathlib import Path
 import random
-
 from scipy.ndimage import gaussian_filter
 
+# Importiere plots_vort aus own_plotting
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from own_plotting import plots_vort
+
 class PIV:
-    def __init__(self, dim=1024, normalized=False, localized=False, largeImage=True, smoothing=2, few_data=False, ntrain_max=np.inf):
+    def __init__(self, dim=1024, normalized=False, localized=False, largeImage=True, 
+                 smoothing=2, few_data=False, ntrain_max=np.inf):
         self.dim = dim
         self.name = 'PIV' + str(self.dim)
         
@@ -36,74 +37,107 @@ class PIV:
         if normalized:
             self.name += '_norm'
 
-        # Zeige auf den "largerImage" Ordner mit den Original-Dateien der Autoren
-        folder = Path(__file__).parent / "data" / "largerImage" # Pfad evtl. anpassen!
+        # Stelle sicher, dass der images/ Ordner existiert
+        os.makedirs("images", exist_ok=True)
+
+        # Robuste Pfad-Suche für die PIV-Dateien
+        possible_folders = [
+            Path(__file__).parent / "data" / "largerImage",
+            Path(__file__).parent / "largerImage",
+            Path("../MSGM-data/largerImage"),
+            Path("data/largerImage")
+        ]
         
-        if not folder.exists():
-            raise FileNotFoundError(f"Original-Datenordner nicht gefunden: {folder}")
+        folder = None
+        for p in possible_folders:
+            if p.exists() and list(p.glob("*_vortdiv.npy")):
+                folder = p
+                break
+                
+        if folder is None:
+            folder = Path(__file__).parent / "data" / "largerImage"
+            if not folder.exists():
+                raise FileNotFoundError(f"PIV-Datenordner nicht gefunden. Gesucht u.a. in: {folder}")
 
-        print(f"Loading authors' raw PIV data from: {folder}")
+        print(f"Loading PIV data from folder: {folder}")
 
-        # 1. Alle Einzeldateien laden und stapeln -> Form (Samples, 8192)
+        # 1. Alle Einzeldateien laden
         files = sorted(folder.glob("*_vortdiv.npy"))
         if not files:
-            raise FileNotFoundError(f"Keine _vortdiv.npy Dateien in {folder} gefunden!")
+            raise FileNotFoundError(f"Keine *_vortdiv.npy Dateien in {folder} gefunden!")
             
         npdata = np.vstack([np.load(f) for f in files])
 
-        # 2. Skalieren und Zentrieren (wie Autoren)
+        # 2. Skalieren und Zentrieren
         npdata = npdata / 2.5
         npdata = npdata - npdata.mean(axis=0)
 
         # 3. Reshape in 64x64 Gitter & Vorticity extrahieren
         npixelx_max = 64
         if largeImage:
-            # WICHTIG: order='F' ist zwingend nötig, da DaVis/Matlab so exportiert!
-            npdata = npdata.reshape((npdata.shape[0], npixelx_max, npixelx_max, 2), order='F')
-            npdata = npdata[:, :, :, 0] # Nur Vorticity behalten -> Form (Samples, 64, 64)
+            if not (dim == npixelx**2):
+                raise ValueError(f"Incorrect dim to subsample: {dim}")
+                
+            npdata = npdata.reshape(([npdata.shape[0], npixelx_max, npixelx_max, 2]), order='F')
 
-            # 4. Smoothing (Smoothing=2 aus der Config)
+            # --- PLOT 1: Original Image ---
+            time_id = 0
+            plots_vort(npdata[time_id, :, :, 0])
+            plt.savefig(f"images/originalimageAtt{time_id}.png")
+            plt.close('all')
+
+            npdata = npdata[:, :, :, 0]  # Nur Vorticity behalten -> Form (Samples, 64, 64)
+
+            # 4. Smoothing
             if smoothing > 0:
                 print("Filtering images (Smoothing)...")
                 if smoothing == 1:
                     sigmax = npdata.shape[1] // (3 * npixelx)
                 elif smoothing == 2:
                     sigmax = npdata.shape[1] // npixelx
-                    npdata *= 4  # Autoren-Multiplikator
+                    npdata *= 4  # Multiplikator der Autoren
                 
                 for i in range(npdata.shape[0]):
                     npdata[i, :, :] = gaussian_filter(npdata[i, :, :], sigma=sigmax)
 
-            # 5. Subsampling auf Ziel-Dimension (z.B. 32x32 = 1024)
-            print("Subsampling images to match required dimension...")
-            ix = np.linspace(0, npdata.shape[1]-1, npixelx, dtype=int)
-            iy = np.linspace(0, npdata.shape[2]-1, npixelx, dtype=int)
+                # --- PLOT 2: Smoothed Image ---
+                plots_vort(npdata[time_id, :, :])
+                plt.savefig(f"images/smoothedimageAtt{time_id}.png")
+                plt.close('all')
+
+            # 5. Subsampling auf Ziel-Dimension (z. B. 32x32)
+            print("Subsampling images to match the required dimension...")
+            ix = np.linspace(0, npdata.shape[1] - 1, npixelx, dtype=int)
+            iy = np.linspace(0, npdata.shape[2] - 1, npixelx, dtype=int)
             npdata = npdata[:, ix, :]
             npdata = npdata[:, :, iy]
 
-            # Wieder flachklopfen -> Form (Samples, 1024)
-            npdata = npdata.reshape((npdata.shape[0], dim), order='F')
+            # --- PLOT 3: Subsampled Image ---
+            plots_vort(npdata[time_id, :, :])
+            plt.savefig(f"images/subsampleimageAtt{time_id}.png")
+            plt.close('all')
+
+            # Zurück in Vektorform -> (Samples, 1024)
+            npdata = npdata.reshape(([npdata.shape[0], dim]), order='F')
         else:
             npdata = npdata[:, 0:self.dim]
 
-        # 6. Train/Test Split (exakt wie Autoren: n_test = 1/3)
+        # 6. Train/Test Split
         if few_data:
             n_train = min([2 * npdata.shape[0] // 3, ntrain_max])
-            n_test = npdata.shape[0] - n_train 
+            n_test = npdata.shape[0] - n_train
         else:
             n_test = npdata.shape[0] // 3
 
-        # Slice-Notation der Autoren
         self.npdata = npdata[0:-n_test, :]
         self.npdatatest = npdata[-n_test:, :]
 
         self.max_nsamples = self.npdata.shape[0]
         self.max_nsamplestest = self.npdatatest.shape[0]
 
-        # 7. Standardabweichung berechnen und ggf. normalisieren
+        # 7. Standardabweichung berechnen und normalisieren
         self.std = npdata.std(axis=0)
         if normalized:
-            # + 1e-8 um Division durch 0 zu vermeiden (sicherer als Original)
             self.npdata = self.npdata / (self.std + 1e-8)
             self.npdatatest = self.npdatatest / (self.std + 1e-8)
 
