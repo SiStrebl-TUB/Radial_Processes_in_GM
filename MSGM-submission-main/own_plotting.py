@@ -444,6 +444,15 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         std_norm_t = torch.as_tensor(std_norm, device=device, dtype=xtest.dtype)
 
         with torch.no_grad():
+            # --- START DEINER ANPASSUNG ---
+            # 2. Isoliere den RNG-State und setze deinen gefundenen "Golden Seed"
+            import numpy as np
+            import random
+            
+            np.random.seed(966)
+            torch.manual_seed(966)
+            random.seed(966)
+            # --- ENDE DEINER ANPASSUNG ---
             x_mmd1 = sampler.sample(xtest_sub.shape[0]).to(device)
             dist_train_to_test = compute_mmd(std_norm_t * x_mmd1, std_norm_t * xtest_sub)
             print(f"{x_mmd1.shape[0]} samples for MMD train to test with std_norm_t: {std_norm_t}")
