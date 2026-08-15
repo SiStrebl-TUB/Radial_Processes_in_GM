@@ -22,6 +22,12 @@ import gc
 @torch.no_grad()
 def compute_kernel(x, y):
     with torch.no_grad():
+        # ZWINGEND ERFORDERLICH für 2500 Samples:
+        # Konvertiere in 64-Bit, damit die winzigen MMD-Differenzen
+        # beim anschließenden .mean() nicht abgerundet werden!
+        x = x.to(torch.float64)
+        y = y.to(torch.float64)
+        
         dim = float(x.size(1))
         
         # torch.cdist berechnet die Summe der quadratischen Distanzen.

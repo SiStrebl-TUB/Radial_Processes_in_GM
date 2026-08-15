@@ -61,7 +61,7 @@ print_every = 10000
 
 # Inference
 include_t0_reverse = True # for plots
-num_samples = 1000
+num_samples = 2500
 max_num_samples_for_mmd = num_samples
 evalmmmd = True
 first_run = True
