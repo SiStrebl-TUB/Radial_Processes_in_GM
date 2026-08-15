@@ -22,18 +22,17 @@ import gc
 @torch.no_grad()
 def compute_kernel(x, y):
     with torch.no_grad():
-        x_size = x.size(0)
-        y_size = y.size(0)
-        dim = x.size(1)
-        x = x.unsqueeze(1) # (x_size, 1, dim)
-        y = y.unsqueeze(0) # (1, y_size, dim)
-        tiled_x = x.expand(x_size, y_size, dim)
-        tiled_y = y.expand(x_size, y_size, dim)
-        kernel_input = (tiled_x - tiled_y).pow(2).mean(2)/float(dim)
-        result = torch.exp(-kernel_input) # (x_size, y_size)
-        del kernel_input, tiled_x, tiled_y
+        dim = float(x.size(1))
+        
+        # torch.cdist berechnet exakt die quadratische Distanz, 
+        # ohne den RAM-fressenden 3D-Tensor aufzubauen.
+        # Geteilt durch 'dim' entspricht es haargenau dem .mean(2) der Autoren.
+        kernel_input = torch.cdist(x, y, p=2.0).pow(2) / dim
+        
+        result = torch.exp(-kernel_input)
+        
         gc.collect()
-    return result # (x_size, y_size)
+    return result
 
 @torch.no_grad()
 def compute_mmd(x, y):
