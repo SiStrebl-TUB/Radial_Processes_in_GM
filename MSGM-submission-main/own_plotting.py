@@ -434,6 +434,17 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     print(f"!!! ACHTUNG !!! Das Debug-Bild liegt exakt hier:\n{debug_path}")
     print("*" * 50)
     # ========================================================
+    # === SANITY CHECK 2: Wie sieht dein generiertes Bild ROH aus? ===
+    gen_image = xgen[0].detach().cpu().numpy().reshape((32, 32), order='F')
+    plots_vort(gen_image, vmin=-2, vmax=2)
+    
+    debug_gen_path = os.path.abspath("DEBUG_RawGenImage.png")
+    plt.savefig(debug_gen_path)
+    plt.close('all')
+    print("*" * 50)
+    print(f"!!! ACHTUNG !!! Das rohe GEN-Bild liegt hier:\n{debug_gen_path}")
+    print("*" * 50)
+    # ========================================================
 
     if save_results and not justLoad:
         np.save(name_simu + ".npy", xgen.clone().detach().cpu().numpy())
