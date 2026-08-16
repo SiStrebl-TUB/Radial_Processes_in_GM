@@ -421,15 +421,43 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     xgen = xs[-1, :, :].to(device)
 
     import os
+
+    # =================================================================
+    # DIAGNOSE: Wie viele der 1000 Samples sind eigentlich kaputt?
+    # =================================================================
+    print("\n--- STARTE BATCH-DIAGNOSE ---")
+    xgen_np = xgen.detach().cpu().numpy()
+    
+    smoothness_list = []
+    for j in range(xgen_np.shape[0]):
+        img = xgen_np[j].reshape((32, 32), order='F')
+        diff_y = np.mean(np.abs(img[1:, :] - img[:-1, :]))
+        diff_x = np.mean(np.abs(img[:, 1:] - img[:, :-1]))
+        smoothness_list.append((diff_x + diff_y) / 2.0)
+        
+    smoothness_arr = np.array(smoothness_list)
+    
+    # Wir wissen: Gute PIV-Bilder haben eine Smoothness von ca. 0.1 bis 0.25
+    # Rauschen hat eine Smoothness von > 0.5
+    good_mask = smoothness_arr < 0.35
+    
+    num_good = good_mask.sum()
+    num_bad = (~good_mask).sum()
+    
+    print(f"Total Samples im Batch: {len(smoothness_arr)}")
+    print(f"GUTE Samples (Smoothness < 0.35): {num_good}")
+    print(f"KAPUTTE Samples (Smoothness >= 0.35): {num_bad}")
+    
+    if num_bad > 0:
+        bad_indices = np.where(~good_mask)[0]
+        print(f"Die ersten 10 kaputten Indizes: {bad_indices[:10]}")
+    print("-----------------------------\n")
     
     print("\n" + "*" * 70)
-    print("=== EXTENDED SANITY CHECK: 5 Samples, Reshape Order & Smoothness ===")
+    print("=== REDUCED SANITY CHECK: 1 Sample, Order F only ===")
     
     debug_dir = os.path.abspath("DEBUG_SanityCheck")
     os.makedirs(debug_dir, exist_ok=True)
-    print(f"Alle Debug-Bilder werden in folgendem Ordner gespeichert:\n{debug_dir}\n")
-
-    num_samples_to_test = min(2, xtest.shape[0], xs.shape[1])
 
     # Hilfsfunktion für die Smoothness (Total Variation)
     def calc_smoothness(img_2d):
@@ -438,7 +466,9 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         diff_x = np.mean(np.abs(img_2d[:, 1:] - img_2d[:, :-1]))
         return (diff_x + diff_y) / 2.0
 
-    for i in range(num_samples_to_test):
+    # Nur noch 1 Sample prüfen (spart Zeit und Speicher)
+    if xtest.shape[0] > 0 and xs.shape[1] > 0:
+        i = 0
         print(f"--- Auswertung für Sample {i} ---")
         
         # --- Echte Testdaten (xtest) ---
@@ -447,10 +477,6 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         
         plots_vort(test_img_f, vmin=-2, vmax=2)
         plt.savefig(os.path.join(debug_dir, f"DEBUG_Test_Sample{i}_OrderF.png"))
-        plt.close('all')
-        
-        plots_vort(test_vec.reshape((32, 32), order='C'), vmin=-2, vmax=2)
-        plt.savefig(os.path.join(debug_dir, f"DEBUG_Test_Sample{i}_OrderC.png"))
         plt.close('all')
 
         # --- Generierte Daten am ENDE der SDE (xs[-1]) ---
@@ -461,31 +487,12 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         plt.savefig(os.path.join(debug_dir, f"DEBUG_Gen_Step-1_Sample{i}_OrderF.png"))
         plt.close('all')
         
-        plots_vort(gen_end_vec.reshape((32, 32), order='C'), vmin=-2, vmax=2)
-        plt.savefig(os.path.join(debug_dir, f"DEBUG_Gen_Step-1_Sample{i}_OrderC.png"))
-        plt.close('all')
-
-        # --- Generierte Daten am START der SDE (xs[0]) ---
-        gen_start_vec = xs[0, i, :].detach().cpu().numpy()
-        gen_start_img_f = gen_start_vec.reshape((32, 32), order='F')
-        
-        plots_vort(gen_start_img_f, vmin=-2, vmax=2)
-        plt.savefig(os.path.join(debug_dir, f"DEBUG_Gen_Step0_Sample{i}_OrderF.png"))
-        plt.close('all')
-        
-        plots_vort(gen_start_vec.reshape((32, 32), order='C'), vmin=-2, vmax=2)
-        plt.savefig(os.path.join(debug_dir, f"DEBUG_Gen_Step0_Sample{i}_OrderC.png"))
-        plt.close('all')
-        
         # --- Statistiken und Smoothness vergleichen ---
-        # Wir berechnen die Smoothness am (hoffentlich korrekten) Order='F' Bild
         smooth_test = calc_smoothness(test_img_f)
         smooth_end = calc_smoothness(gen_end_img_f)
-        smooth_start = calc_smoothness(gen_start_img_f)
 
         print(f"  TEST Bild     -> Mean: {test_vec.mean():.4f} | Smoothness (Gradient): {smooth_test:.4f}")
         print(f"  GEN Bild [-1] -> Mean: {gen_end_vec.mean():.4f} | Smoothness (Gradient): {smooth_end:.4f}")
-        print(f"  GEN Bild [ 0] -> Mean: {gen_start_vec.mean():.4f} | Smoothness (Gradient): {smooth_start:.4f}")
         
     print("*" * 70 + "\n")
 
