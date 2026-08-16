@@ -435,7 +435,8 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     print("*" * 50)
     # ========================================================
     # === SANITY CHECK 2: Wie sieht dein generiertes Bild ROH aus? ===
-    gen_image = xgen[0].detach().cpu().numpy().reshape((32, 32), order='F')
+    # HIER order='C' eintragen!
+    gen_image = xgen[0].detach().cpu().numpy().reshape((32, 32), order='C') 
     plots_vort(gen_image, vmin=-2, vmax=2)
     
     debug_gen_path = os.path.abspath("DEBUG_RawGenImage.png")
