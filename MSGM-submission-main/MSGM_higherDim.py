@@ -33,12 +33,24 @@ from SDEs import forward_SDE,SDE,VariancePreservingSDE,PluginReverseSDE,multipli
 from data import SwissRoll,Cauchy,Gaussian,PIV
 import gc
 
+# --- Füge diese Zeile zu deinen restlichen Imports ganz oben in slerp_model.py hinzu ---
+
+# Fügt den übergeordneten Ordner (wo "learn_noise" liegt) zu den Suchpfaden hinzu
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
+# JETZT klappen die Imports aus learn_noise fehlerfrei!
+from learn_noise.networks import UNetModel, VelocityFieldAdapter
+from types import SimpleNamespace
+
 np.random.seed(0)
 torch.manual_seed(0)
 random.seed(0)
 
 DISPLAY_MAX_ROWS = 20  # number of max rows to print for a DataFrame
 pd.set_option('display.max_rows', DISPLAY_MAX_ROWS)
+
 
 # arguments
 
@@ -463,58 +475,128 @@ if __name__ == '__main__':
                                     inf_sde = VariancePreservingSDE(beta_min=beta_min_SGM, beta_max=beta_max_SGM, \
                                                                     t_epsilon=t_eps, T=T, num_steps_forward=num_steps_forward, \
                                                                     device=device)"""
+                            def _build_unet(args: SimpleNamespace) -> torch.nn.Module:
+                                """
+                                Baut das U-Net Modell und kapselt es direkt in den VelocityFieldAdapter,
+                                sodass es nach außen hin wie ein flaches MLP (1024D -> 1024D) aussieht.
+                                """
+                                image_shape = tuple(args.image_shape)
+                                
+                                model_channels = int(getattr(args, "unet_model_channels", 64))
+                                channel_mult = tuple(getattr(args, "unet_channel_mult", (1, 2, 2, 2)))
+                                num_res_blocks = int(getattr(args, "unet_num_res_blocks", 2))
+                                attention_resolutions = tuple(getattr(args, "unet_attention_resolutions", (16,)))
+                                num_heads = int(getattr(args, "unet_num_heads", 4))
+                                num_head_channels = int(getattr(args, "unet_num_head_channels", 64))
+                                dropout = float(getattr(args, "unet_dropout", 0.1))
+                                
+                                in_channels = int(getattr(args, "unet_in_channels", image_shape[0]))
+                                out_channels = int(getattr(args, "unet_out_channels", in_channels))
+
+                                base_model = UNetModel(
+                                    in_channels=in_channels,
+                                    out_channels=out_channels,
+                                    image_size=image_shape[-1],
+                                    model_channels=model_channels,
+                                    channel_mult=channel_mult,
+                                    num_res_blocks=num_res_blocks,
+                                    attention_resolutions=attention_resolutions,
+                                    num_heads=num_heads,
+                                    num_head_channels=num_head_channels,
+                                    dropout=dropout,
+                                    num_classes=None,
+                                )
+                                
+                                device = torch.device(args.device)
+                                base_model = base_model.to(device)
+                                
+                                # Der Adapter sorgt für die Übersetzung zwischen flachen Vektoren und 2D-Bildern
+                                return VelocityFieldAdapter(base_model, image_shape).to(device)
+
+
                             print("reached fm model")
                             # --- DEIN FLOW MATCHING SETUP ---
-                            RUN_FLOW_MATCHING = True  # Schalter
-                            
+                            RUN_FLOW_MATCHING = True  
                             
                             if RUN_FLOW_MATCHING:
                                 from fm_wrapper import FlowMatchingWrapper
                                 from types import SimpleNamespace
                                 
-                                # 1. HIER AUCH DEINE WRAPPER IMPORTIEREN!
+                                # 1. Slerp Wrapper importieren
                                 from slerp_model import (
-                                    _build_model, 
                                     AngularInferenceWrapper, 
                                     TorchWrapper, 
                                     ODEWrapper,
                                     SphericalProjectedModel
                                 )
                                 
+                                # 2. Hilfsfunktion für den U-Net Bau
+                                def _build_unet_local(args: SimpleNamespace) -> torch.nn.Module:
+                                    image_shape = tuple(args.image_shape)
+                                    model_channels = int(getattr(args, "unet_model_channels", 64))
+                                    channel_mult = tuple(getattr(args, "unet_channel_mult", (1, 2, 2, 2)))
+                                    num_res_blocks = int(getattr(args, "unet_num_res_blocks", 2))
+                                    attention_resolutions = tuple(getattr(args, "unet_attention_resolutions", (16,)))
+                                    num_heads = int(getattr(args, "unet_num_heads", 4))
+                                    num_head_channels = int(getattr(args, "unet_num_head_channels", 64))
+                                    dropout = float(getattr(args, "unet_dropout", 0.1))
+                                    in_channels = int(getattr(args, "unet_in_channels", image_shape[0]))
+                                    out_channels = int(getattr(args, "unet_out_channels", in_channels))
+
+                                    base_model = UNetModel(
+                                        in_channels=in_channels,
+                                        out_channels=out_channels,
+                                        image_size=image_shape[-1],
+                                        model_channels=model_channels,
+                                        channel_mult=channel_mult,
+                                        num_res_blocks=num_res_blocks,
+                                        attention_resolutions=attention_resolutions,
+                                        num_heads=num_heads,
+                                        num_head_channels=num_head_channels,
+                                        dropout=dropout,
+                                        num_classes=None,
+                                    )
+                                    device = torch.device(args.device)
+                                    return VelocityFieldAdapter(base_model.to(device), image_shape).to(device)
+                                
+                                # 3. Parameter definieren (Passend zum Training!)
                                 args = SimpleNamespace(
-                                    target_dataset="msgm_piv", # oder msgm_cauchy
+                                    target_dataset="msgm_piv", 
                                     input_dim=sampler.dim, 
                                     dim=sampler.dim,
-                                    hidden_size=64,       # Checke, dass das zu deinen Gewichten passt!
-                                    hidden_layers=3,      
+                                    image_shape=[1, 32, 32],      
+                                    unet_model_channels=64,       
+                                    unet_channel_mult=(1, 2, 2, 2),
+                                    unet_num_res_blocks=2,
+                                    unet_attention_resolutions=(16,),
+                                    unet_num_heads=4,
+                                    unet_num_head_channels=64,
+                                    unet_dropout=0.1,
                                     time_embedding="sinusoidal",
                                     concat_t_emb=True,
-                                    slerp=True,           # <--- WICHTIG: Auf True, wenn du mit slerp trainiert hast!
+                                    slerp=True,
                                     device=device
                                 )
                                 
-                                # 2. Basis-Modell bauen
-                                fm_model = _build_model(args)
-                                #print(f"Flow Matching Modell gebaut: {fm_model}")
-                                # 3. EMA Gewichte laden (ema_step_150000.pt)
+                                # 4. U-Net bauen und Gewichte laden
+                                fm_model = _build_unet_local(args)
+                                
                                 checkpoint = torch.load("ema_test.pt", map_location=device)
                                 state_dict = checkpoint.get("state_dict", checkpoint)
                                 
                                 cleaned_state_dict = {}
                                 for k, v in state_dict.items():
-                                    # AveragedModel (EMA) speichert oft mit "module." Prefix. Wir schneiden das ab.
                                     cleaned_k = k.replace("module.", "")
-                                    # Falls "model." fehlt oder zu viel ist (wie vorhin besprochen)
-                                    if cleaned_k.startswith("model.") and not hasattr(fm_model, 'model'):
-                                        cleaned_k = cleaned_k[6:]
-                                    elif not cleaned_k.startswith("model.") and hasattr(fm_model, 'model'):
+                                    if not cleaned_k.startswith("model.") and hasattr(fm_model, 'model'):
                                         cleaned_k = "model." + cleaned_k
                                     cleaned_state_dict[cleaned_k] = v
-                                print("weights loaded")
-                                fm_model.load_state_dict(cleaned_state_dict, strict=False)
+                                    
+                                print("Lade Gewichte...")
+                                missing_keys, unexpected_keys = fm_model.load_state_dict(cleaned_state_dict, strict=False)
+                                print(f"Missing keys: {len(missing_keys)} | Unexpected keys: {len(unexpected_keys)}")
                                 fm_model.eval()
                                 
-                                # 4. DEINE ORIGINAL-WRAPPER DRUMBAUEN (Exakt wie in deiner main!)
+                                # 5. In deine Slerp/MSGM Wrapper packen
                                 if getattr(args, 'slerp', False):
                                     fm_model = SphericalProjectedModel(fm_model)
                                     ang_mode = AngularInferenceWrapper(fm_model)
@@ -523,13 +605,9 @@ if __name__ == '__main__':
                                     wrapper = TorchWrapper(fm_model)
                                     
                                 ode_func = ODEWrapper(wrapper).to(device)
-                                
-                                # 5. In unseren MSGM-Zeit-Umkehrer packen
-                                # Wir übergeben jetzt ode_func anstatt fm_model!
-                                
                                 gen_sde = FlowMatchingWrapper(ode_func, device, sampler).to(device)
                                 
-                                print(f"\n>>> Flow Matching Modell (Native Wrappers, Slerp={args.slerp}) geladen. Starte Evaluation!\n")
+                                print(f"\n>>> U-NET Flow Matching Modell geladen. Starte Evaluation!\n")
                                 
                             else:
                                 # Der originale MSGM Code
