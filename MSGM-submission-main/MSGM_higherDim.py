@@ -549,10 +549,26 @@ if __name__ == '__main__':
                                 
                                 cleaned_state_dict = {}
                                 for k, v in state_dict.items():
+                                    # 1. Den EMA-Schrittzähler ignorieren wir
+                                    if "n_averaged" in k:
+                                        continue
+                                        
+                                    # 2. Standard-Prefix entfernen
                                     cleaned_k = k.replace("module.", "")
-                                    if not cleaned_k.startswith("model.") and hasattr(fm_model, 'model'):
+                                    
+                                    # 3. DAS IST DER FIX: Doppeltes "model.model." zu einfachem "model." machen
+                                    if cleaned_k.startswith("model.model."):
+                                        cleaned_k = cleaned_k.replace("model.model.", "model.")
+                                        
+                                    # 4. Falls gar kein model. davor steht, obwohl wir es brauchen
+                                    elif not cleaned_k.startswith("model.") and hasattr(fm_model, 'model'):
                                         cleaned_k = "model." + cleaned_k
+                                        
                                     cleaned_state_dict[cleaned_k] = v
+                                    
+                                print("Lade Gewichte...")
+                                missing_keys, unexpected_keys = fm_model.load_state_dict(cleaned_state_dict, strict=False)
+                                print(f"Missing keys: {len(missing_keys)} | Unexpected keys: {len(unexpected_keys)}")
                                     
                                 print("Lade Gewichte...")
                                 missing_keys, unexpected_keys = fm_model.load_state_dict(cleaned_state_dict, strict=False)
