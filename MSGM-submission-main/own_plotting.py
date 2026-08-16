@@ -575,3 +575,31 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
             mmd_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = val_dist
         else:
             mmd_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = val_dist
+
+        # =================================================================
+        # SHOWCASE: 10 rein generierte Vorticity Felder (mit plots_vort)
+        # =================================================================
+        print("\n=== Erstelle Showcase-Plots mit 10 zufälligen Generationen ===")
+        
+        showcase_dir = os.path.abspath("SHOWCASE_Generations")
+        os.makedirs(showcase_dir, exist_ok=True)
+        
+        # Wir nehmen die ersten 10 Samples aus unserem fertigen Batch
+        num_showcase = min(10, xgen.shape[0])
+        
+        for idx in range(num_showcase):
+            # 1. Vektor holen und in Numpy umwandeln
+            gen_vec = xgen[idx].detach().cpu().numpy()
+            
+            # 2. Reshape in 2D mit der korrekten Order 'F'
+            gen_img_f = gen_vec.reshape((32, 32), order='F')
+            
+            # 3. Plotten mit deiner eigenen Funktion
+            plots_vort(gen_img_f, vmin=-2, vmax=2)
+            
+            # 4. Speichern und Plot schließen
+            filename = os.path.join(showcase_dir, f"Generated_Sample_{idx+1:02d}.png")
+            plt.savefig(filename, bbox_inches='tight', dpi=150)
+            plt.close('all')
+            
+        print(f"10 Showcase-Bilder erfolgreich gespeichert im Ordner:\n{showcase_dir}\n")
