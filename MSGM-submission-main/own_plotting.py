@@ -420,32 +420,77 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     xtest = xtest.to(device)
     xgen = xs[-1, :, :].to(device)
 
-    # === SANITY CHECK: Wie sieht das echte Testbild aus? ===
-    test_image = xtest[0].detach().cpu().numpy().reshape((32, 32), order='F')
-    plots_vort(test_image, vmin=-2, vmax=2)
+    import os
     
-    # Speichere es explizit als feste Datei im aktuellen Verzeichnis
-    debug_path = os.path.abspath("DEBUG_TrueTestImage.png")
-    plt.savefig(debug_path)
-    plt.close('all')
+    print("\n" + "*" * 70)
+    print("=== EXTENDED SANITY CHECK: 5 Samples, Reshape Order & Smoothness ===")
     
-    # Drucke den exakten Pfad in die Konsole
-    print("*" * 50)
-    print(f"!!! ACHTUNG !!! Das Debug-Bild liegt exakt hier:\n{debug_path}")
-    print("*" * 50)
-    # ========================================================
-    # === SANITY CHECK 2: Wie sieht dein generiertes Bild ROH aus? ===
-    # HIER order='C' eintragen!
-    gen_image = xgen[0].detach().cpu().numpy().reshape((32, 32), order='C') 
-    plots_vort(gen_image, vmin=-2, vmax=2)
-    
-    debug_gen_path = os.path.abspath("DEBUG_RawGenImage.png")
-    plt.savefig(debug_gen_path)
-    plt.close('all')
-    print("*" * 50)
-    print(f"!!! ACHTUNG !!! Das rohe GEN-Bild liegt hier:\n{debug_gen_path}")
-    print("*" * 50)
-    # ========================================================
+    debug_dir = os.path.abspath("DEBUG_SanityCheck")
+    os.makedirs(debug_dir, exist_ok=True)
+    print(f"Alle Debug-Bilder werden in folgendem Ordner gespeichert:\n{debug_dir}\n")
+
+    num_samples_to_test = min(5, xtest.shape[0], xs.shape[1])
+
+    # Hilfsfunktion für die Smoothness (Total Variation)
+    def calc_smoothness(img_2d):
+        # Mittlere absolute Differenz zu direkten Nachbarn (x und y Richtung)
+        diff_y = np.mean(np.abs(img_2d[1:, :] - img_2d[:-1, :]))
+        diff_x = np.mean(np.abs(img_2d[:, 1:] - img_2d[:, :-1]))
+        return (diff_x + diff_y) / 2.0
+
+    for i in range(num_samples_to_test):
+        print(f"--- Auswertung für Sample {i} ---")
+        
+        # --- Echte Testdaten (xtest) ---
+        test_vec = xtest[i].detach().cpu().numpy()
+        test_img_f = test_vec.reshape((32, 32), order='F')
+        
+        plots_vort(test_img_f, vmin=-2, vmax=2)
+        plt.savefig(os.path.join(debug_dir, f"DEBUG_Test_Sample{i}_OrderF.png"))
+        plt.close('all')
+        
+        plots_vort(test_vec.reshape((32, 32), order='C'), vmin=-2, vmax=2)
+        plt.savefig(os.path.join(debug_dir, f"DEBUG_Test_Sample{i}_OrderC.png"))
+        plt.close('all')
+
+        # --- Generierte Daten am ENDE der SDE (xs[-1]) ---
+        gen_end_vec = xs[-1, i, :].detach().cpu().numpy()
+        gen_end_img_f = gen_end_vec.reshape((32, 32), order='F')
+        
+        plots_vort(gen_end_img_f, vmin=-2, vmax=2)
+        plt.savefig(os.path.join(debug_dir, f"DEBUG_Gen_Step-1_Sample{i}_OrderF.png"))
+        plt.close('all')
+        
+        plots_vort(gen_end_vec.reshape((32, 32), order='C'), vmin=-2, vmax=2)
+        plt.savefig(os.path.join(debug_dir, f"DEBUG_Gen_Step-1_Sample{i}_OrderC.png"))
+        plt.close('all')
+
+        # --- Generierte Daten am START der SDE (xs[0]) ---
+        gen_start_vec = xs[0, i, :].detach().cpu().numpy()
+        gen_start_img_f = gen_start_vec.reshape((32, 32), order='F')
+        
+        plots_vort(gen_start_img_f, vmin=-2, vmax=2)
+        plt.savefig(os.path.join(debug_dir, f"DEBUG_Gen_Step0_Sample{i}_OrderF.png"))
+        plt.close('all')
+        
+        plots_vort(gen_start_vec.reshape((32, 32), order='C'), vmin=-2, vmax=2)
+        plt.savefig(os.path.join(debug_dir, f"DEBUG_Gen_Step0_Sample{i}_OrderC.png"))
+        plt.close('all')
+        
+        # --- Statistiken und Smoothness vergleichen ---
+        # Wir berechnen die Smoothness am (hoffentlich korrekten) Order='F' Bild
+        smooth_test = calc_smoothness(test_img_f)
+        smooth_end = calc_smoothness(gen_end_img_f)
+        smooth_start = calc_smoothness(gen_start_img_f)
+
+        print(f"  TEST Bild     -> Mean: {test_vec.mean():.4f} | Smoothness (Gradient): {smooth_test:.4f}")
+        print(f"  GEN Bild [-1] -> Mean: {gen_end_vec.mean():.4f} | Smoothness (Gradient): {smooth_end:.4f}")
+        print(f"  GEN Bild [ 0] -> Mean: {gen_start_vec.mean():.4f} | Smoothness (Gradient): {smooth_start:.4f}")
+        
+    print("*" * 70 + "\n")
+
+    if save_results and not justLoad:
+        np.save(name_simu + ".npy", xgen.clone().detach().cpu().numpy())
 
     if save_results and not justLoad:
         np.save(name_simu + ".npy", xgen.clone().detach().cpu().numpy())
