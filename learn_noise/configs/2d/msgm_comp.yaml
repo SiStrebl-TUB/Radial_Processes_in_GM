@@ -1,24 +1,28 @@
-# Default joint-training configuration for 2D experiments.
+# Angepasste joint-training configuration für PIV (U-Net)
 seed: 1
 device: cuda
 target_dataset: msgm_piv # override via --override target_dataset=...
 dim: 1024
-hidden_size: 64
-hidden_layers: 3
+
+# === ÄNDERUNGEN FÜR DAS U-NET ===
+hidden_size: 0              # Vorher 64 -> 0 triggert das U-Net
+hidden_layers: 0            # Vorher 3 -> 0 triggert das U-Net
+image_shape: [1, 32, 32]    # Vorher null -> Zwingend nötig für Convolutions (1 Kanal, 32x32)
+# ================================
+
 time_embedding: sinusoidal
 concat_t_emb: true
-lr: 0.001
+lr: 0.001                   # Hinweis: Falls das U-Net explodiert (Loss = NaN), setze das auf 0.0002 runter
 batch_size: 128
-epochs: 100000 #200000 für heavy tails
+epochs: 100000              # 200000 für heavy tails
 model_grad_clip: 1.0
 ema: 0.999
 ema_start_step: 0
 
 strat_ot: false 
-use_minibatch_ot: false #minibatch OT for linear FM models
+use_minibatch_ot: false     # minibatch OT for linear FM models
 slerp: true
-baseline_flow: target_norm_emp #linear for linear FM models, target_norm_emp for spherical models
-
+baseline_flow: target_norm_emp # linear for linear FM models, target_norm_emp for spherical models
 baseline_latent: gaussian
 baseline_flow_T: 1.0
 baseline_mmd_b: 1.0
@@ -55,7 +59,6 @@ metric: ot
 q_rqs_bins: 32
 q_rqs_bound: 500.0
 q_rqs_layers: 3
-image_shape: null
 runs_dir: null
 log_wandb: true
 wandb_entity: simon161002-technical-university-of-berlin

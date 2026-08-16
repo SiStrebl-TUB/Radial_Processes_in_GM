@@ -1195,6 +1195,43 @@ def train_fm_baseline(
                 log_payload['metrics/minibatch_ot_cost'] = float(pairing_cost.item())
             wandb.log(log_payload, step=step)
 
+        # =========================================================================
+        # NEU: SANITY CHECK (Alle 1000 Schritte direkt im Terminal)
+        # =========================================================================
+        if step % 1000 == 0 and step > 0:
+            with torch.no_grad():
+                # Nimm das erste Sample aus dem aktuellen Batch
+                v_pred_sample = velocity_pred[0].detach().cpu().numpy()
+                v_targ_sample = velocity_target[0].detach().cpu().numpy()
+                
+                # Prüfe, ob es unsere 1024D (32x32) PIV-Daten sind
+                if args.dim == 1024:
+                    try:
+                        # Zurück ins 32x32 Grid falten
+                        v_pred_img = v_pred_sample.reshape((32, 32), order='F')
+                        v_targ_img = v_targ_sample.reshape((32, 32), order='F')
+                        
+                        # Lokale Glätte (Gradient) berechnen
+                        def calc_smoothness(img_2d):
+                            diff_y = np.mean(np.abs(img_2d[1:, :] - img_2d[:-1, :]))
+                            diff_x = np.mean(np.abs(img_2d[:, 1:] - img_2d[:, :-1]))
+                            return (diff_x + diff_y) / 2.0
+                            
+                        sm_pred = calc_smoothness(v_pred_img)
+                        sm_targ = calc_smoothness(v_targ_img)
+                        
+                        print(f"\n--- [SANITY CHECK | Step {step}] ---")
+                        print(f"ZIEL (Target) -> Mean: {v_targ_sample.mean():.4f}, Std: {v_targ_sample.std():.4f}, Smoothness: {sm_targ:.4f}")
+                        print(f"NETZ (Pred)   -> Mean: {v_pred_sample.mean():.4f}, Std: {v_pred_sample.std():.4f}, Smoothness: {sm_pred:.4f}")
+                        
+                        # Alarm, falls das Netz kollabiert ist!
+                        if np.abs(v_pred_sample).max() < 1e-4:
+                            print("!!! WARNUNG: Das U-Net gibt (fast) nur Nullen aus! Learning Rate zu hoch? !!!")
+                        print("----------------------------------\n")
+                    except Exception as e:
+                        print(f"Sanity Check Error: {e}")
+        # =========================================================================
+
         do_light = (args.eval_sample > 0) and (((step + 1) % args.eval_step) == 0)
         do_heavy = (args.big_eval_samples > 0) and (((step + 1) % args.big_eval_step) == 0)
         
