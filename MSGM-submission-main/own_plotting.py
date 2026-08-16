@@ -429,7 +429,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     os.makedirs(debug_dir, exist_ok=True)
     print(f"Alle Debug-Bilder werden in folgendem Ordner gespeichert:\n{debug_dir}\n")
 
-    num_samples_to_test = min(5, xtest.shape[0], xs.shape[1])
+    num_samples_to_test = min(2, xtest.shape[0], xs.shape[1])
 
     # Hilfsfunktion für die Smoothness (Total Variation)
     def calc_smoothness(img_2d):
