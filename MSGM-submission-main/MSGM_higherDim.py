@@ -475,43 +475,6 @@ if __name__ == '__main__':
                                     inf_sde = VariancePreservingSDE(beta_min=beta_min_SGM, beta_max=beta_max_SGM, \
                                                                     t_epsilon=t_eps, T=T, num_steps_forward=num_steps_forward, \
                                                                     device=device)"""
-                            def _build_unet(args: SimpleNamespace) -> torch.nn.Module:
-                                """
-                                Baut das U-Net Modell und kapselt es direkt in den VelocityFieldAdapter,
-                                sodass es nach außen hin wie ein flaches MLP (1024D -> 1024D) aussieht.
-                                """
-                                image_shape = tuple(args.image_shape)
-                                
-                                model_channels = int(getattr(args, "unet_model_channels", 64))
-                                channel_mult = tuple(getattr(args, "unet_channel_mult", (1, 2, 2, 2)))
-                                num_res_blocks = int(getattr(args, "unet_num_res_blocks", 2))
-                                attention_resolutions = tuple(getattr(args, "unet_attention_resolutions", (16,)))
-                                num_heads = int(getattr(args, "unet_num_heads", 4))
-                                num_head_channels = int(getattr(args, "unet_num_head_channels", 64))
-                                dropout = float(getattr(args, "unet_dropout", 0.1))
-                                
-                                in_channels = int(getattr(args, "unet_in_channels", image_shape[0]))
-                                out_channels = int(getattr(args, "unet_out_channels", in_channels))
-
-                                base_model = UNetModel(
-                                    in_channels=in_channels,
-                                    out_channels=out_channels,
-                                    image_size=image_shape[-1],
-                                    model_channels=model_channels,
-                                    channel_mult=channel_mult,
-                                    num_res_blocks=num_res_blocks,
-                                    attention_resolutions=attention_resolutions,
-                                    num_heads=num_heads,
-                                    num_head_channels=num_head_channels,
-                                    dropout=dropout,
-                                    num_classes=None,
-                                )
-                                
-                                device = torch.device(args.device)
-                                base_model = base_model.to(device)
-                                
-                                # Der Adapter sorgt für die Übersetzung zwischen flachen Vektoren und 2D-Bildern
-                                return VelocityFieldAdapter(base_model, image_shape).to(device)
 
 
                             print("reached fm model")
@@ -594,6 +557,13 @@ if __name__ == '__main__':
                                 print("Lade Gewichte...")
                                 missing_keys, unexpected_keys = fm_model.load_state_dict(cleaned_state_dict, strict=False)
                                 print(f"Missing keys: {len(missing_keys)} | Unexpected keys: {len(unexpected_keys)}")
+                                print(f"Missing keys: {len(missing_keys)} | Unexpected keys: {len(unexpected_keys)}")
+                                if len(missing_keys) > 0:
+                                    print("\n--- WAS DAS MODELL ERWARTET (Missing) ---")
+                                    print(missing_keys[:5])  # Zeigt die ersten 5 gesuchten Namen
+                                if len(unexpected_keys) > 0:
+                                    print("\n--- WAS IN DER DATEI STEHT (Unexpected) ---")
+                                    print(unexpected_keys[:5])  # Zeigt die ersten 5 Namen aus der Datei
                                 fm_model.eval()
                                 
                                 # 5. In deine Slerp/MSGM Wrapper packen
