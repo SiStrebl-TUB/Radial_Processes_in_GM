@@ -10,6 +10,7 @@ import matplotlib.ticker as mticker
 import pandas as pd
 import random
 from typing import Optional, Tuple, Dict, Any
+from PIL import Image
 
 from quantitative_comparison import compute_mmd
 
@@ -603,3 +604,64 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
             plt.close('all')
             
         print(f"10 Showcase-Bilder erfolgreich gespeichert im Ordner:\n{showcase_dir}\n")
+
+        # =================================================================
+        # ANIMATION: GIF Generierung für ein einzelnes Sample (t=1 -> t=0)
+        # =================================================================
+
+        print("\n=== Erstelle GIF-Animation der Trajektorie ===")
+        
+        gif_dir = os.path.abspath("SHOWCASE_GIFs")
+        os.makedirs(gif_dir, exist_ok=True)
+        
+        sample_idx = 0  # Welches Sample wollen wir animieren? (0 = das erste)
+        
+        # Trajektorie für dieses eine Sample extrahieren -> Shape: [Zeitschritte, 1024]
+        trajectory = xs[:, sample_idx, :].detach().cpu().numpy()
+        num_steps = trajectory.shape[0]
+        
+        # 1. Norm-Check (Beweis für das SLERP / konstante Norm Verhalten)
+        norm_start = np.linalg.norm(trajectory[0])
+        norm_mid = np.linalg.norm(trajectory[num_steps // 2])
+        norm_end = np.linalg.norm(trajectory[-1])
+        print(f"Radius (Norm) bei t=1.0 (Noise): {norm_start:.4f}")
+        print(f"Radius (Norm) bei t=0.5 (Mitte): {norm_mid:.4f}")
+        print(f"Radius (Norm) bei t=0.0 (Daten): {norm_end:.4f}")
+        
+        # 2. Frames generieren und zwischenspeichern
+        frames = []
+        temp_dir = os.path.join(gif_dir, "temp_frames")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        print(f"Zeichne {num_steps} Frames für das GIF. Das kann einen Moment dauern...")
+        for step in range(num_steps):
+            # Zeitschritt in 32x32 Bild umwandeln (Order 'F' ist hier wichtig!)
+            img_f = trajectory[step].reshape((32, 32), order='F')
+            
+            # Plotten mit deiner eigenen Funktion
+            plots_vort(img_f, vmin=-2, vmax=2)
+            
+            # Titel hinzufügen (Optional, aber cool um die Schritte im GIF zu sehen)
+            plt.title(f"Step {step}/{num_steps-1}", fontsize=14, color='white') # Weiß für dunklen Plot
+            
+            # Frame speichern
+            frame_path = os.path.join(temp_dir, f"frame_{step:03d}.png")
+            plt.savefig(frame_path, bbox_inches='tight', dpi=100) # dpi=100 reicht für GIFs völlig
+            plt.close('all')
+            
+            # Frame für die GIF-Erstellung in den RAM laden
+            frames.append(Image.open(frame_path))
+            
+        # 3. GIF aus den Frames zusammenbauen
+        gif_path = os.path.join(gif_dir, f"{name_simu}_evolution_sample{sample_idx}.gif")
+        
+        # duration = ms pro Frame. Bei 128 Schritten und 50ms ist das GIF ca. 6.5 Sekunden lang.
+        frames[0].save(
+            gif_path,
+            save_all=True,
+            append_images=frames[1:],
+            duration=50, 
+            loop=0  # 0 bedeutet, das GIF loopt unendlich oft
+        )
+        
+        print(f"GIF erfolgreich gespeichert unter: {gif_path}\n")
