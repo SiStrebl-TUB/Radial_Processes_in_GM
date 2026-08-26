@@ -653,7 +653,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
             frames.append(Image.open(frame_path))
             
         # 3. GIF aus den Frames zusammenbauen
-        gif_path = os.path.join(gif_dir, f"{name_simu}_evolution_sample{sample_idx}.gif")
+        gif_path = os.path.join(gif_dir, f"evolution_sample_{sample_idx}.gif")
         
         # duration = ms pro Frame. Bei 128 Schritten und 50ms ist das GIF ca. 6.5 Sekunden lang.
         frames[0].save(
@@ -665,3 +665,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         )
         
         print(f"GIF erfolgreich gespeichert unter: {gif_path}\n")
+
+        import shutil
+        shutil.rmtree(temp_dir)
+        print("Temporäre Frames wurden gelöscht.")
