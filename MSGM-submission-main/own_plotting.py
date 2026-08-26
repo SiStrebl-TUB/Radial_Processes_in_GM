@@ -578,94 +578,67 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
             mmd_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = val_dist
 
         # =================================================================
-        # SHOWCASE: 10 rein generierte Vorticity Felder (mit plots_vort)
-        # =================================================================
-        print("\n=== Erstelle Showcase-Plots mit 10 zufälligen Generationen ===")
-        
-        showcase_dir = os.path.abspath("SHOWCASE_Generations")
-        os.makedirs(showcase_dir, exist_ok=True)
-        
-        # Wir nehmen die ersten 10 Samples aus unserem fertigen Batch
-        num_showcase = min(10, xgen.shape[0])
-        
-        for idx in range(num_showcase):
-            # 1. Vektor holen und in Numpy umwandeln
-            gen_vec = xgen[idx].detach().cpu().numpy()
-            
-            # 2. Reshape in 2D mit der korrekten Order 'F'
-            gen_img_f = gen_vec.reshape((32, 32), order='F')
-            
-            # 3. Plotten mit deiner eigenen Funktion
-            plots_vort(gen_img_f, vmin=-2, vmax=2)
-            
-            # 4. Speichern und Plot schließen
-            filename = os.path.join(showcase_dir, f"Generated_Sample_{idx+1:02d}.png")
-            plt.savefig(filename, bbox_inches='tight', dpi=150)
-            plt.close('all')
-            
-        print(f"10 Showcase-Bilder erfolgreich gespeichert im Ordner:\n{showcase_dir}\n")
+    # ANIMATION: 4 GIFs erzeugen (jedes 4. Frame + Start & Ende)
+    # =================================================================
+    import shutil
 
-        # =================================================================
-        # ANIMATION: GIF Generierung für ein einzelnes Sample (t=1 -> t=0)
-        # =================================================================
-
-        print("\n=== Erstelle GIF-Animation der Trajektorie ===")
+    print("\n=== Erstelle 4 GIF-Animationen (reduzierte Framerate) ===")
+    
+    gif_dir = os.path.abspath("SHOWCASE_GIFs")
+    os.makedirs(gif_dir, exist_ok=True)
+    
+    # Bereinigter Name für die Datei (ohne Pfad-Schrägstriche)
+    clean_name = os.path.basename(name_simu)
+    
+    # Wie viele GIFs wollen wir maximal? (4 Stück)
+    num_gifs = min(4, xs.shape[1]) 
+    
+    for sample_idx in range(num_gifs):
+        print(f"\nGeneriere GIF für Sample {sample_idx+1}/{num_gifs}...")
         
-        gif_dir = os.path.abspath("SHOWCASE_GIFs")
-        os.makedirs(gif_dir, exist_ok=True)
-        
-        sample_idx = 0  # Welches Sample wollen wir animieren? (0 = das erste)
-        
-        # Trajektorie für dieses eine Sample extrahieren -> Shape: [Zeitschritte, 1024]
         trajectory = xs[:, sample_idx, :].detach().cpu().numpy()
         num_steps = trajectory.shape[0]
         
-        # 1. Norm-Check (Beweis für das SLERP / konstante Norm Verhalten)
-        norm_start = np.linalg.norm(trajectory[0])
-        norm_mid = np.linalg.norm(trajectory[num_steps // 2])
-        norm_end = np.linalg.norm(trajectory[-1])
-        print(f"Radius (Norm) bei t=1.0 (Noise): {norm_start:.4f}")
-        print(f"Radius (Norm) bei t=0.5 (Mitte): {norm_mid:.4f}")
-        print(f"Radius (Norm) bei t=0.0 (Daten): {norm_end:.4f}")
+        # Logik: Jedes 4. Bild (0, 4, 8, 12...)
+        frame_indices = list(range(0, num_steps, 4))
         
-        # 2. Frames generieren und zwischenspeichern
+        # WICHTIG: Sicherstellen, dass das allerletzte Bild (t=0) auf jeden Fall dabei ist!
+        if frame_indices[-1] != num_steps - 1:
+            frame_indices.append(num_steps - 1)
+            
         frames = []
-        temp_dir = os.path.join(gif_dir, "temp_frames")
+        temp_dir = os.path.join(gif_dir, f"temp_frames_{sample_idx}")
         os.makedirs(temp_dir, exist_ok=True)
         
-        print(f"Zeichne {num_steps} Frames für das GIF. Das kann einen Moment dauern...")
-        for step in range(num_steps):
-            # Zeitschritt in 32x32 Bild umwandeln (Order 'F' ist hier wichtig!)
+        for i, step in enumerate(frame_indices):
+            # Zeitschritt in 32x32 Bild umwandeln
             img_f = trajectory[step].reshape((32, 32), order='F')
             
-            # Plotten mit deiner eigenen Funktion
             plots_vort(img_f, vmin=-2, vmax=2)
             
-            # Titel hinzufügen (Optional, aber cool um die Schritte im GIF zu sehen)
-            plt.title(f"Step {step}/{num_steps-1}", fontsize=14, color='white') # Weiß für dunklen Plot
+            # Titel mit Sample-Nummer und aktuellem Step
+            plt.title(f"Sample {sample_idx+1} | Step {step}/{num_steps-1}", fontsize=14, color='white')
             
-            # Frame speichern
-            frame_path = os.path.join(temp_dir, f"frame_{step:03d}.png")
-            plt.savefig(frame_path, bbox_inches='tight', dpi=100) # dpi=100 reicht für GIFs völlig
+            frame_path = os.path.join(temp_dir, f"frame_{i:03d}.png")
+            plt.savefig(frame_path, bbox_inches='tight', dpi=100)
             plt.close('all')
             
-            # Frame für die GIF-Erstellung in den RAM laden
             frames.append(Image.open(frame_path))
             
-        # 3. GIF aus den Frames zusammenbauen
-        gif_path = os.path.join(gif_dir, f"evolution_sample_{sample_idx}.gif")
+        gif_path = os.path.join(gif_dir, f"evolution_sample{sample_idx+1}_fast.gif")
         
-        # duration = ms pro Frame. Bei 128 Schritten und 50ms ist das GIF ca. 6.5 Sekunden lang.
+        # Dauer anpassen: Da wir nur 1/4 der Frames haben, zeigen wir jedes Frame etwas länger (z.B. 150ms), 
+        # damit die Animation insgesamt gut sichtbar bleibt und nicht in 1 Sekunde vorbei ist.
         frames[0].save(
             gif_path,
             save_all=True,
             append_images=frames[1:],
-            duration=50, 
-            loop=0  # 0 bedeutet, das GIF loopt unendlich oft
+            duration=150, 
+            loop=0
         )
         
-        print(f"GIF erfolgreich gespeichert unter: {gif_path}\n")
-
-        import shutil
+        # Räume den Ordner mit den Einzelbildern für dieses Sample sofort wieder auf
         shutil.rmtree(temp_dir)
-        print("Temporäre Frames wurden gelöscht.")
+        print(f"-> Gespeichert: {gif_path}")
+        
+    print("\nAlle 4 GIFs wurden erfolgreich erstellt und die Temp-Ordner aufgeräumt!\n")
