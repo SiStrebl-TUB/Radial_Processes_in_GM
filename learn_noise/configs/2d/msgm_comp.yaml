@@ -20,7 +20,7 @@ ema: 0.999
 ema_start_step: 0
 
 strat_ot: false 
-use_minibatch_ot: false     # minibatch OT for linear FM models
+use_minibatch_ot: true     # minibatch OT for linear FM models
 slerp: true
 baseline_flow: target_norm_emp # linear for linear FM models, target_norm_emp for spherical models
 baseline_latent: gaussian

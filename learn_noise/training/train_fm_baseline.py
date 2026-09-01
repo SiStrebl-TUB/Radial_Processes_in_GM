@@ -1004,10 +1004,15 @@ def train_fm_baseline(
         plt.savefig(os.path.join(args.runs_dir, "seam_evolution.png"), dpi=300)
         plt.close(fig)
 
+
+    use_minibatch_ot = getattr(args, "use_minibatch_ot", False)
+    print(f"use_minibatch_ot: {use_minibatch_ot}")
     print("Starte Trainingsloop...")
 
 
-    
+    ##############################################################################
+    #######################___TRAINING LOOP___####################################
+    ##############################################################################
     for step in tqdm(range(args.epochs), desc="Flow-matching baseline"):
         start_idx = step * args.batch_size
         end_idx = start_idx + args.batch_size
@@ -1115,10 +1120,30 @@ def train_fm_baseline(
                     noise = x_noise_shuffled[start_idx:end_idx]
 
                 if use_minibatch_ot:
-                    idx_best, transport_plan = minibatch_ot_pairing(x_0, noise)
-                    x_0 = x_0[idx_best]
-                    #z = z[idx_best]
-                    pairing_cost = transport_plan.max(dim=0).values.mean()
+                    # 1. Normieren: Reine Richtungen auf der Einheitssphäre extrahieren
+                    x_0_unit = torch.nn.functional.normalize(x_0, dim=1)
+                    noise_unit = torch.nn.functional.normalize(noise, dim=1)
+
+                    # 2. Zuordnung machen: Optimalen Transport-Plan via Cosinus-Ähnlichkeit finden
+                    # spherical_ot_pairing liefert die Indizes zur Umordnung von set_b (noise_unit)
+                    idx_best, transport_plan = spherical_ot_pairing(x_0_unit, noise_unit)
+
+                    # 3. Permutieren: Noise-Richtungen an x_0 anpassen
+                    noise_unit_matched = noise_unit[idx_best]
+
+                    # 4. Zurückskalieren: Den gematchten Richtungen die Radii des zugehörigen x_0 geben
+                    # (x0_lognorms wurde im Code darüber bereits berechnet)
+                    noise = noise_unit_matched * x0_lognorms.unsqueeze(1)
+
+                    # Optional: Die Kostenberechnung
+                    # Cosinus-Ähnlichkeit der optimal zugeordneten Paare berechnen
+                    cos_sim = (x_0_unit * noise_unit_matched).sum(dim=1)
+
+                    # Als Kosten-Metrik (0 = identische Richtung, 2 = exakt entgegengesetzt)
+                    pairing_cost = (1.0 - cos_sim).mean().item() 
+
+                    # Alternativ als echter durchschnittlicher Winkel (Bogenmaß):
+                    #pairing_cost = torch.acos(torch.clamp(cos_sim, -0.999, 0.999)).mean().item()
 
                 elif args.slerp:
                     # Full radius matching: x_0 and noise are already perfectly aligned by construction
