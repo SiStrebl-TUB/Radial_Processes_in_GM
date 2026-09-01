@@ -185,6 +185,33 @@ def spherical_ot_pairing(set_a: torch.Tensor, set_b: torch.Tensor):
     
     return permuted_indices, plan
 
+def sliced_ot_pairing(targets, noise):
+    """
+    targets, noise: (B, D) tensors
+    Beide sollten für die Projektion idealerweise normiert sein.
+    """
+    B, D = targets.shape
+    device = targets.device
+    
+    # 1. Zufällige globale Richtung generieren
+    v = torch.randn(D, device=device)
+    v = torch.nn.functional.normalize(v, dim=0)
+    
+    # 2. Beide Sets auf diese Achse projizieren (1D Werte)
+    proj_targets = torch.mv(targets, v)
+    proj_noise = torch.mv(noise, v)
+    
+    # 3. Sortieren und Indizes extrahieren
+    _, idx_targets = torch.sort(proj_targets)
+    _, idx_noise = torch.sort(proj_noise)
+    
+    # (Optional) Wenn du nur die Indizes zurückgeben willst, um
+    # danach die unnormierten Radii zuzuordnen:
+    final_indices = torch.empty_like(idx_noise)
+    final_indices[idx_targets] = idx_noise
+    
+    return final_indices
+
 def oversample_heavy_tails(x_data, top_fraction=0.1):
     """
     Nimmt die Top X% der Daten (basierend auf der Norm) und kopiert sie so oft,

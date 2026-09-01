@@ -28,7 +28,8 @@ from learn_noise.training.common import (
     count_parameters,
     write_model_size_summary,
     spherical_ot_pairing,
-    oversample_heavy_tails
+    oversample_heavy_tails,
+    sliced_ot_pairing
 )
 from learn_noise.training.logging import (
     log_baseline_evaluation,
@@ -1126,7 +1127,7 @@ def train_fm_baseline(
 
                     # 2. Zuordnung machen: Optimalen Transport-Plan via Cosinus-Ähnlichkeit finden
                     # spherical_ot_pairing liefert die Indizes zur Umordnung von set_b (noise_unit)
-                    idx_best, transport_plan = spherical_ot_pairing(x_0_unit, noise_unit)
+                    idx_best = sliced_ot_pairing(x_0_unit, noise_unit)
 
                     # 3. Permutieren: Noise-Richtungen an x_0 anpassen
                     noise_unit_matched = noise_unit[idx_best]
