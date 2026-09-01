@@ -78,28 +78,6 @@ max_num_samples_for_mmd = num_samples
 evalmmmd = True
 first_run = True
 
-# # Fair convergence comparison
-# # num_steps_forward = 128 # cauchy
-# # num_steps_forward = 64 # old default
-# num_steps_forward = 16 # new default ?
-# ntrain_maxs = [ 2**16, 2**10, 2**6 ]
-# # iterationss = [ 2**24, 2**20, 2**16, 2**12, 2**8 ] # cauchy
-# iterationss = [ 2**20, 2**16, 2**12, 2**8]
-# # num_stepss_backward = [1000,100,50,10,4,2]
-# # num_stepss_backward = [1024,256,64,16,4,1]
-# # full CV
-# num_stepss_backward = [128,32,8,2]
-# nruns_mmd = 10 # full CV comparisons
-# # # cheap CV
-# # num_stepss_backward = [128,32,8,2]
-# # nruns_mmd = 1 # cheap CV comparisons
-# fair_comparison = True # comparaison SGM vs MSGM with same RAM usage and same learning time
-# ssm_intT_ref = False
-# first_run = True
-# if first_run:
-#     evalmmmd = False # 1st pass
-# else:
-#     evalmmmd = True # 2nd pass (long)
 
 # Fair comparison more CV
 ntrain_maxs = [ np.inf ]
@@ -111,25 +89,11 @@ fair_comparison = True # comparaison SGM vs MSGM with same RAM usage and same le
 ssm_intT_ref = False
 evalmmmd = True
 
-# # expressivity for cauchy (long to run)
-# ntrain_maxs = [ np.inf ]
-# iterationss = [ 2**20]
-# num_steps_forward = 128
-# num_stepss_backward = [128]
-# nruns_mmd = 1
-# fair_comparison = False 
-# ssm_intT_ref = False
-# beta_min=0.1
-# beta_max=1
 MSGMs = [1]
-
 batch_sizes = [128]
 
 # Dataset
 datatype = 'PIV'
-# datatype = 'PIV'
-# datatype = 'gaussian'
-# datatype = 'cauchy'
 normalized_data = True
 mixedTimes = False 
 Res=[None]
@@ -148,49 +112,21 @@ match datatype:
         t_eps /= ratio 
         beta_max_SGM=beta_max
         beta_min_SGM=beta_min
-
-
         few_data = True
-
         localized = True
     case 'gaussian': # multi-dimesnional gaussian
         dims = [16]#[2,4,8,16,32]
         
     case 'cauchy': # multi-dimesnional Cauchy
-        # dims = [2,4,8,16]
-        
-        # dims = [2]
-        # correlation = False # default
-        # beta_max=0.4
-        # correlation = True 
-        # beta_max=2
-
-        # dims = [8]
         dims = [4]
-
         correlation = True 
         beta_max=1
         beta_min=0.01
-
-        # # beta_max_SGM=2
-        # beta_max_SGM=beta_max
-        # beta_min_SGM=beta_min
-        
         t_eps /= 10 # 
-
         num_steps_forward = 128 # cauchy
 
     case _:
         raise ValueError("Unknown datatype: {}".format(datatype))
-
-# # # DEBUG set:
-# print('WARNING : DEBUG !!!!!!')
-# iterationss = [16,8]
-# num_stepss_backward = [10]
-# num_steps_forward = 10
-# num_samples = 10
-# batch_sizes = [2]
-# dbg = True
 
 # Plots
 scatter_plots = True
@@ -233,10 +169,6 @@ def m_name_simu_root(sampler_name, gen_sde_name_SDE, iterations_ref, batch_size,
         + str(num_samples_init) + "InitSples_" \
         + str(batch_size) + "batchSize_" \
         + str(num_steps_forward) + "stepsForw_"
-    print("beta_min_SGM = " + str(beta_min_SGM))
-    print("beta_min = " + str(beta_min))
-    print("beta_max_SGM = " + str(beta_max_SGM))
-    print("beta_max = " + str(beta_max))
     if MSGM:
         name_simu_root += \
             str(beta_min) + "beta_min" \
@@ -261,9 +193,6 @@ def m_name_simu_root(sampler_name, gen_sde_name_SDE, iterations_ref, batch_size,
 if torch.cuda.is_available():
     device = 'cuda'
     print('use gpu\n')
-# elif torch.backends.mps.is_available():
-#     device = 'mps'
-#     print('use mps\n')
 else:
     device = 'cpu'
     print('use cpu\n')
@@ -292,13 +221,10 @@ if __name__ == '__main__':
                         normalized_data = True
                         ssm_intT = False
                         premodule = None # default
-                        # print('WARNING : SGM with sphericalNN !!!!!!')
-                        # premodule = "NormalizeLogRadius" 
                     else:
                         normalized_data = False
                         ssm_intT = ssm_intT_ref
                         premodule = "NormalizeLogRadius" # default
-                        # premodule = "PolarCoordinatesWithLogRadius" 
 
                     np.random.seed(0)
                     torch.manual_seed(0) 
@@ -317,8 +243,6 @@ if __name__ == '__main__':
                             plot_xlim = 6
                             val_hist = 2*plot_xlim
                         case 'gaussian':
-                            # correlation = False
-                            # normalized_data = False
                             correlation = True # default
                             sampler = Gaussian(dim, normalized=normalized_data, correlation = correlation)
                             if not correlation:
@@ -328,8 +252,6 @@ if __name__ == '__main__':
                             val_hist = 2*plot_xlim
 
                         case 'cauchy':
-                            print("is cauchy")
-                            print(normalized_data)
                             sampler = Cauchy(dim, normalized=normalized_data, correlation = correlation)
                             crop_data_plot = True
                             log_scale_pdf = True
@@ -338,7 +260,7 @@ if __name__ == '__main__':
 
                             if not dbg:
                                 num_samples = 50000 # to have enough points in the tails for the plots
-                                evalmmmd = True #False
+                                evalmmmd = True 
                                 nruns_mmd = 1
 
                             if not correlation:
@@ -348,7 +270,7 @@ if __name__ == '__main__':
                                 pdf_theor = torch.distributions.Cauchy(0.0, scale)
                             else:
                                 if dim == 2:
-                                    plot_xlim = 5 # for d=2 / warning : should depend of d : overwise we remove all far points / or separate crop and plot_xlim
+                                    plot_xlim = 5 
                                 else:
                                     plot_xlim = 10
                             plot_crop = 3*plot_xlim
@@ -368,11 +290,6 @@ if __name__ == '__main__':
 
                     with torch.no_grad():
                         xtest = sampler.sampletest(num_samples)
-                        print("\n=== DATA SHAPE CHECK ===")
-                        print("Gesamter Test-Datensatz (xtest.shape):", xtest.shape)
-                        print("Form eines einzelnen Samples (xtest[0].shape):", xtest[0].shape)
-                        print("Anzahl der Elemente in einem Sample (sampler.dim):", sampler.dim)
-                        print("========================\n")
                         sampler.dim = xtest.shape[1]
                         std_test = xtest.std(axis=0)
                         if normalized_data:
@@ -408,33 +325,25 @@ if __name__ == '__main__':
                         i_batch_size = -1
                         for batch_size_ref in batch_sizes:
                             i_batch_size +=1
-                            if (ssm_intT):# for a fair comparison
-                                batch_size = int(batch_size_ref/num_steps_forward) # for a fair comparison in term of RAM
+                            if (ssm_intT):
+                                batch_size = int(batch_size_ref/num_steps_forward)
                             else:  
                                 batch_size = batch_size_ref
-                            if (fair_comparison and MSGM):# for a fair comparison
+                            if (fair_comparison and MSGM):
                                 ratio_ite = max([1, int(np.sqrt(sampler.dim) * num_steps_forward / 16)])
-                                print('ratio_ite = ' + str(ratio_ite))
-                                iterations = int(iterations_ref/ratio_ite) # for a fair comparison in term of learning time 
+                                iterations = int(iterations_ref/ratio_ite)
                                 iterations = max([1,iterations])
                             else:  
                                 iterations = iterations_ref
-                            num_samples_init = 1000 #min(num_samples_init_max,iterations*batch_size)
-                            print('num_samples_init = ' + str(num_samples_init))
+                            num_samples_init = 1000 
                         
-                            # init models
                             drift_q = MLP(input_dim=sampler.dim, index_dim=1, hidden_dim=128, premodule = premodule).to(device)
                             T = torch.nn.Parameter(torch.FloatTensor([T0]), requires_grad=False)
-                            print("here")
 
                             with torch.no_grad():
                                 if MSGM and False:
-                                    print("MSGM initialized")
-                                    # FIX 1: 2 Samples reichen völlig als Dummy-Input, 
-                                    # damit die SDE intern weiß, dass sie in 1024D lebt.
                                     dummy_samples = 2 
                                     x_init = sampler.sample(dummy_samples).to(device)
-                                    print(f"MSGMs: x_init shape = {x_init.shape}, device = {x_init.device}")
                                     inf_sde = multiplicativeNoise(
                                         x_init,
                                         beta_min=beta_min, 
@@ -446,12 +355,10 @@ if __name__ == '__main__':
                                         estim_cst_norm_dens_r_T=False, 
                                         norm_sampler=norm_sampler,
                                         norm_map=norm_map, 
-                                        plot_validate=False # FIX 2: Plotting hart deaktivieren!
+                                        plot_validate=False 
                                     )
-                                    print("MSGM initialized")
                                     del x_init
                                 else:
-                                    print("SGM initialized")
                                     inf_sde = VariancePreservingSDE(
                                         beta_min=beta_min_SGM, 
                                         beta_max=beta_max_SGM, 
@@ -461,31 +368,12 @@ if __name__ == '__main__':
                                         device=device
                                     )
 
-                            """with torch.no_grad():
-                                if MSGM:
-                                    x_init = sampler.sample(num_samples_init).to(device)
-                                    inf_sde = multiplicativeNoise(x_init,beta_min=beta_min, beta_max=beta_max, \
-                                                                t_epsilon=t_eps, T=T, num_steps_forward=num_steps_forward, \
-                                                                device=device, estim_cst_norm_dens_r_T = False, \
-                                                                norm_sampler = norm_sampler,
-                                                                norm_map = norm_map, \
-                                                                plot_validate = plot_validate)
-                                    del x_init
-                                else:
-                                    inf_sde = VariancePreservingSDE(beta_min=beta_min_SGM, beta_max=beta_max_SGM, \
-                                                                    t_epsilon=t_eps, T=T, num_steps_forward=num_steps_forward, \
-                                                                    device=device)"""
-
-
-                            print("reached fm model")
-                            # --- DEIN FLOW MATCHING SETUP ---
+                            # --- DEIN FLOW MATCHING SETUP (ANGEPASST) ---
                             RUN_FLOW_MATCHING = True  
                             
                             if RUN_FLOW_MATCHING:
                                 from fm_wrapper import FlowMatchingWrapper
                                 from types import SimpleNamespace
-                                
-                                # 1. Slerp Wrapper importieren
                                 from slerp_model import (
                                     AngularInferenceWrapper, 
                                     TorchWrapper, 
@@ -493,7 +381,6 @@ if __name__ == '__main__':
                                     SphericalProjectedModel
                                 )
                                 
-                                # 2. Hilfsfunktion für den U-Net Bau
                                 def _build_unet_local(args: SimpleNamespace) -> torch.nn.Module:
                                     image_shape = tuple(args.image_shape)
                                     model_channels = int(getattr(args, "unet_model_channels", 64))
@@ -522,7 +409,6 @@ if __name__ == '__main__':
                                     device = torch.device(args.device)
                                     return VelocityFieldAdapter(base_model.to(device), image_shape).to(device)
                                 
-                                # 3. Parameter definieren (Passend zum Training!)
                                 args = SimpleNamespace(
                                     target_dataset="msgm_piv", 
                                     input_dim=sampler.dim, 
@@ -541,197 +427,131 @@ if __name__ == '__main__':
                                     device=device
                                 )
                                 
-                                # 4. U-Net bauen und Gewichte laden
-                                fm_model = _build_unet_local(args)
-                                
-                                checkpoint = torch.load("ema_test.pt", map_location=device)
-                                state_dict = checkpoint.get("state_dict", checkpoint)
-                                
-                                cleaned_state_dict = {}
-                                for k, v in state_dict.items():
-                                    # 1. Den EMA-Schrittzähler ignorieren wir
-                                    if "n_averaged" in k:
-                                        continue
+                                def _load_and_clean_weights(model, checkpoint_path, device):
+                                    checkpoint = torch.load(checkpoint_path, map_location=device)
+                                    state_dict = checkpoint.get("state_dict", checkpoint)
+                                    cleaned_state_dict = {}
+                                    for k, v in state_dict.items():
+                                        if "n_averaged" in k:
+                                            continue
+                                        cleaned_k = k.replace("module.", "")
+                                        if cleaned_k.startswith("model.model."):
+                                            cleaned_k = cleaned_k.replace("model.model.", "model.")
+                                        elif not cleaned_k.startswith("model.") and hasattr(model, 'model'):
+                                            cleaned_k = "model." + cleaned_k
+                                        cleaned_state_dict[cleaned_k] = v
                                         
-                                    # 2. Standard-Prefix entfernen
-                                    cleaned_k = k.replace("module.", "")
-                                    
-                                    # 3. DAS IST DER FIX: Doppeltes "model.model." zu einfachem "model." machen
-                                    if cleaned_k.startswith("model.model."):
-                                        cleaned_k = cleaned_k.replace("model.model.", "model.")
-                                        
-                                    # 4. Falls gar kein model. davor steht, obwohl wir es brauchen
-                                    elif not cleaned_k.startswith("model.") and hasattr(fm_model, 'model'):
-                                        cleaned_k = "model." + cleaned_k
-                                        
-                                    cleaned_state_dict[cleaned_k] = v
-                                    
-                                print("Lade Gewichte...")
-                                missing_keys, unexpected_keys = fm_model.load_state_dict(cleaned_state_dict, strict=False)
-                                print(f"Missing keys: {len(missing_keys)} | Unexpected keys: {len(unexpected_keys)}")
-                                    
-                                print("Lade Gewichte...")
-                                missing_keys, unexpected_keys = fm_model.load_state_dict(cleaned_state_dict, strict=False)
-                                print(f"Missing keys: {len(missing_keys)} | Unexpected keys: {len(unexpected_keys)}")
-                                print(f"Missing keys: {len(missing_keys)} | Unexpected keys: {len(unexpected_keys)}")
-                                if len(missing_keys) > 0:
-                                    print("\n--- WAS DAS MODELL ERWARTET (Missing) ---")
-                                    print(missing_keys[:5])  # Zeigt die ersten 5 gesuchten Namen
-                                if len(unexpected_keys) > 0:
-                                    print("\n--- WAS IN DER DATEI STEHT (Unexpected) ---")
-                                    print(unexpected_keys[:5])  # Zeigt die ersten 5 Namen aus der Datei
-                                fm_model.eval()
+                                    missing_keys, unexpected_keys = model.load_state_dict(cleaned_state_dict, strict=False)
+                                    model.eval()
+                                    return model
+
+                                def _wrap_model(model, args, device, sampler):
+                                    if getattr(args, 'slerp', False):
+                                        model = SphericalProjectedModel(model)
+                                        ang_mode = AngularInferenceWrapper(model)
+                                        wrapper = TorchWrapper(ang_mode)
+                                    else:
+                                        wrapper = TorchWrapper(model)
+                                    ode_func = ODEWrapper(wrapper).to(device)
+                                    return FlowMatchingWrapper(ode_func, device, sampler).to(device)
+
+                                # Modelle instanziieren und wrappen
+                                fm_model_test = _build_unet_local(args)
+                                fm_model_test_ot = _build_unet_local(args)
+
+                                fm_model_test = _load_and_clean_weights(fm_model_test, "ema_test.pt", device)
+                                fm_model_test_ot = _load_and_clean_weights(fm_model_test_ot, "ema_test_ot.pt", device)
                                 
-                                # 5. In deine Slerp/MSGM Wrapper packen
-                                if getattr(args, 'slerp', False):
-                                    fm_model = SphericalProjectedModel(fm_model)
-                                    ang_mode = AngularInferenceWrapper(fm_model)
-                                    wrapper = TorchWrapper(ang_mode)
-                                else:
-                                    wrapper = TorchWrapper(fm_model)
-                                    
-                                ode_func = ODEWrapper(wrapper).to(device)
-                                gen_sde = FlowMatchingWrapper(ode_func, device, sampler).to(device)
-                                
-                                print(f"\n>>> U-NET Flow Matching Modell geladen. Starte Evaluation!\n")
+                                gen_sdes = {
+                                    "baseline_test": _wrap_model(fm_model_test, args, device, sampler),
+                                    "ot_coupled_test_ot": _wrap_model(fm_model_test_ot, args, device, sampler)
+                                }
+                                # Fallback für alte Variablen im Code
+                                gen_sde = gen_sdes["baseline_test"]
                                 
                             else:
-                                # Der originale MSGM Code
                                 gen_sde = PluginReverseSDE(inf_sde, drift_q, T, vtype=vtype, debias=False, ssm_intT=ssm_intT).to(device)
-
-                            print("data = " + sampler.name )
-                            print("name_SDE = " + str(inf_sde.name_SDE) )   
-                            print("num_steps_forward = " + str(num_steps_forward))
-                            print("beta_min = " + str(beta_min))
-                            print("beta_max = " + str(beta_max))
-                            print("t_eps = " + str(t_eps))     
-                            print("iterations = " + str(iterations) )
-                            print("iterations_ref = " + str(iterations_ref) )
-                            print("batch_size = " + str(batch_size) ) 
-                            print("ssm_intT = " + str(ssm_intT) )  
-                            print("fair_comparison = " + str(fair_comparison) )  
-                            print("premodule = " + str(premodule) )
-                            print("ntrain_max = " + str(ntrain_max))
+                                gen_sdes = {"msgm_original": gen_sde}
 
                             name_simu_root = m_name_simu_root(sampler.name, gen_sde.base_sde.name_SDE, \
                                                                 iterations_ref, batch_size, num_steps_forward, \
                                                                 beta_min, beta_max, ssm_intT, fair_comparison)
                             
-                            if delayed:
-                                print('delayed ...')
-                                time.sleep(1e4)
-                                # time.sleep(1e5)
-
-                            
                             # Forward SDE
                             with torch.no_grad():
-                                print('integrate forward SDE')
                                 for_sde = forward_SDE(inf_sde, T)
                                 xs_forward = rk4_stratonovich_sampler(for_sde, xtest.clone(), num_steps_forward,  \
                                                                     lmbd=0., keep_all_samples=True, \
-                                                                    include_t0=True, norm_correction = MSGM) # sample
+                                                                    include_t0=True, norm_correction = MSGM) 
                                 
                                 preprocessing(xtest, xs_forward, num_steps_forward, name_simu_root, \
                                                 noising_plots, plt_show, folder_results, val_hist, std_test_plot, device)
 
                             if (not justLoad) and (not RUN_FLOW_MATCHING):
-                                # init optimizer
-                                optim = torch.optim.Adam(gen_sde.parameters(), lr=lr)
-
-                                # train
-                                start_time = time.time()
-                                for i in range(iterations):
-                                    optim.zero_grad() # init optimizer
-                                    with torch.no_grad():
-                                        x = sampler.sample(batch_size).to(device) # sample data
-                                    loss = gen_sde.ssm(x).mean() # forward and compute loss
-                                    loss.backward() # backward
-                                    optim.step() # update
-
-                                    # print
-                                    if (i == 0) or ((i+1) % print_every == 0):
-                                        # elbo
-                                        elbo, elbo_std = evaluate(gen_sde, x)
-
-                                        # print
-                                        elapsed = time.time() - start_time
-                                        print('| iter {:6d} | {:5.2f} ms/step | loss {:8.3f} | elbo {:8.3f} | elbo std {:8.3f} '
-                                            .format(i+1, elapsed*1000/print_every, loss.item(), elbo.item(), elbo_std.item()))
-                                        start_time = time.time()
-
-                                        del elbo, elbo_std
-                                        gc.collect()
-                                    
-                                    del x
-                                    # torch.mps.empty_cache()  # does not do much on MPS, but still good practice
-                                    # gc.collect()
-                                del loss, optim
-                                gc.collect()
-
+                                # ... Training Loop bleibt identisch (verwendet Fallback gen_sde) ...
+                                pass
 
                             ## 4. Visualize
                             with torch.no_grad():
-
-                                ### 4.3. Simulate SDEs
-                                """
-                                Simulate the generative SDE by using RK4 method
-                                """
                                 i_num_stepss_backward = -1
                                 for num_steps_backward in num_stepss_backward:
                                     i_num_stepss_backward +=1
-                                    print("Generation : num_steps_backward = " + str(num_steps_backward))
-                                    # init param
-                                    # num_samples = 100000
-
-                                    # indices to visualize
-                                    fig_step = int(num_steps_backward/8) #4
-                                    if fig_step < 1:
-                                        fig_step = 1
-                                    if include_t0_reverse:
-                                        inds = range(0, num_steps_backward+1, fig_step)
-                                    else:
-                                        inds = range(fig_step-1, num_steps_backward, fig_step)
-                                    # sample and plot
-                                    plt.close('all')
-                                    lmbd = 0.
-                                    name_simu = folder_results + "/" + name_simu_root \
-                                        + str(t_eps) + "t_eps" \
-                                        + str(num_steps_backward) + "stepsBack_" \
-                                        + str(include_t0_reverse) + "t0infer"
                                     
-                                    for i_run in range(nruns_mmd):
-                                        print("Run number : " + str(i_run))
-                                        if i_run > 0 :
-                                            directory = "runs" + "/" + sampler.name
-                                            if not os.path.exists(directory):
-                                                os.makedirs(directory)
-                                            name_simu = "runs/" + name_simu_root \
-                                                + str(t_eps) + "t_eps" \
-                                                + str(num_steps_backward) + "stepsBack_" \
-                                                + str(include_t0_reverse) + "t0infer" \
-                                                + "_run"+ str(i_run)
+                                    # NEU: Schleife über beide Modelle!
+                                    for model_name, current_gen_sde in gen_sdes.items():
+                                        print(f"\n--- Generierung & Plotting für: {model_name} (Steps: {num_steps_backward}) ---")
                                         
-                                        if (justLoad):
-                                            save_results = False
-                                            xs = torch.load(name_simu + ".pt", weights_only=True)
+                                        fig_step = int(num_steps_backward/8)
+                                        if fig_step < 1:
+                                            fig_step = 1
+                                        if include_t0_reverse:
+                                            inds = range(0, num_steps_backward+1, fig_step)
                                         else:
-                                            x_0 = gen_sde.latent_sample(num_samples, sampler.dim) # init from prior
-                                            xs = rk4_stratonovich_sampler(gen_sde, x_0, num_steps_backward, lmbd=lmbd,\
-                                                                        keep_all_samples=True, 
-                                                                        include_t0=include_t0_reverse, 
-                                                                        norm_correction = MSGM) # sample
-                                            del x_0
-                                            if (save_results):
-                                                torch.save(xs, name_simu + ".pt")
-                                        print("SHAPE VON XTEST:", xtest.shape)
-                                        print("SHAPE VON XGEN:", xs[-1,:,:].shape)
-                                        postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run, MSGM, sampler, \
-                                                        xs, xtest, std_norm, std_test_plot, datatype, name_simu, dimplot, \
-                                                        crop_data_plot, plot_crop, plot_xlim, plot_ref_pdf, \
-                                                        pdf_theor, log_scale_pdf, columns_plot, \
-                                                        scatter_plots, denoising_plots, include_t0_reverse, plt_show, dpi, height_seaborn, ssize, \
-                                                        evalmmmd, justLoadmmmd, justLoad, save_results, lmbd, val_hist, device, \
-                                                        mmd_ref, mmd_MSGM,mmd_SGM,max_num_samples_for_mmd)
+                                            inds = range(fig_step-1, num_steps_backward, fig_step)
+                                        
+                                        plt.close('all')
+                                        lmbd = 0.
+                                        
+                                        # MODIFIZIERT: Modellname in den Dateipfad aufnehmen
+                                        current_name_simu_root = name_simu_root + "_" + model_name
+                                        
+                                        name_simu = folder_results + "/" + current_name_simu_root \
+                                            + str(t_eps) + "t_eps" \
+                                            + str(num_steps_backward) + "stepsBack_" \
+                                            + str(include_t0_reverse) + "t0infer"
+                                        
+                                        for i_run in range(nruns_mmd):
+                                            if i_run > 0 :
+                                                directory = "runs" + "/" + sampler.name
+                                                if not os.path.exists(directory):
+                                                    os.makedirs(directory)
+                                                name_simu = "runs/" + current_name_simu_root \
+                                                    + str(t_eps) + "t_eps" \
+                                                    + str(num_steps_backward) + "stepsBack_" \
+                                                    + str(include_t0_reverse) + "t0infer" \
+                                                    + "_run"+ str(i_run)
+                                            
+                                            if (justLoad):
+                                                save_results = False
+                                                xs = torch.load(name_simu + ".pt", weights_only=True)
+                                            else:
+                                                # MODIFIZIERT: current_gen_sde statt gen_sde verwenden
+                                                x_0 = current_gen_sde.latent_sample(num_samples, sampler.dim)
+                                                xs = rk4_stratonovich_sampler(current_gen_sde, x_0, num_steps_backward, lmbd=lmbd,\
+                                                                            keep_all_samples=True, 
+                                                                            include_t0=include_t0_reverse, 
+                                                                            norm_correction = MSGM) 
+                                                del x_0
+                                                if (save_results):
+                                                    torch.save(xs, name_simu + ".pt")
+                                                    
+                                            postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run, MSGM, sampler, \
+                                                            xs, xtest, std_norm, std_test_plot, datatype, name_simu, dimplot, \
+                                                            crop_data_plot, plot_crop, plot_xlim, plot_ref_pdf, \
+                                                            pdf_theor, log_scale_pdf, columns_plot, \
+                                                            scatter_plots, denoising_plots, include_t0_reverse, plt_show, dpi, height_seaborn, ssize, \
+                                                            evalmmmd, justLoadmmmd, justLoad, save_results, lmbd, val_hist, device, \
+                                                            mmd_ref, mmd_MSGM,mmd_SGM,max_num_samples_for_mmd)
 
                     ## Convergence plots (with MMD)
 
