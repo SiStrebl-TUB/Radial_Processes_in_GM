@@ -1217,7 +1217,7 @@ def train_fm_baseline(
                 'grad/model_velocity': float(grad_norm.item()),
             }
             if pairing_cost is not None:
-                log_payload['metrics/minibatch_ot_cost'] = float(pairing_cost.item())
+                log_payload['metrics/minibatch_ot_cost'] = float(pairing_cost)
             wandb.log(log_payload, step=step)
 
         # =========================================================================
