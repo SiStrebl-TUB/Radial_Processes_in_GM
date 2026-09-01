@@ -12,9 +12,9 @@ image_shape: [1, 32, 32]    # Vorher null -> Zwingend nötig für Convolutions (
 
 time_embedding: sinusoidal
 concat_t_emb: true
-lr: 0.001                   # Hinweis: Falls das U-Net explodiert (Loss = NaN), setze das auf 0.0002 runter
-batch_size: 128
-epochs: 100000              # 200000 für heavy tails
+lr: 0.002                   # Hinweis: Falls das U-Net explodiert (Loss = NaN), setze das auf 0.0002 runter
+batch_size: 512
+epochs: 20000              # 200000 für heavy tails
 model_grad_clip: 1.0
 ema: 0.999
 ema_start_step: 0
