@@ -625,7 +625,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
             
             frames.append(Image.open(frame_path))
             
-        gif_path = os.path.join(gif_dir, f"evolution_sample{sample_idx+1}_fast.gif")
+        gif_path = os.path.join(gif_dir, f"sample{sample_idx+1}_{name_simu}.gif")
         
         # Dauer anpassen: Da wir nur 1/4 der Frames haben, zeigen wir jedes Frame etwas länger (z.B. 150ms), 
         # damit die Animation insgesamt gut sichtbar bleibt und nicht in 1 Sekunde vorbei ist.
