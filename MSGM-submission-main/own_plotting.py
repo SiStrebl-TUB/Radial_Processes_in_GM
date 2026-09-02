@@ -535,106 +535,127 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
                 plt_show=plt_show, timeToDuplicate=-1)
 
     # =================================================================
-    # MMD Evaluation (Isoliert auf Seed 966 & 64-Bit Präzision)
+    # MMD Evaluation (10 Seeds & 64-Bit Präzision)
     # =================================================================
     if evalmmmd and not justLoadmmmd:
         num_samples_for_mmd = min([xtest.shape[0], max_num_samples_for_mmd])
-        print(f"Evaluating Metrics with {num_samples_for_mmd} samples")
+        print(f"Evaluating Metrics with {num_samples_for_mmd} samples across 10 seeds")
         
         xgen_sub = xgen[0:num_samples_for_mmd-1, :]
         std_norm_t = torch.as_tensor(std_norm, device=device, dtype=xtest.dtype)
 
-        with torch.no_grad():
-            np.random.seed(966)
-            torch.manual_seed(966)
-            random.seed(966)
-            
-            xtest_baseline = sampler.sampletest(2500).to(device)
-            xtest_baseline_sub = xtest_baseline[0:num_samples_for_mmd-1, :]
-            x_mmd1 = sampler.sample(xtest_baseline_sub.shape[0]).to(device)
-            
-            # Denormierte Versionen für die Metriken (wie beim MMD)
-            x_gen_eval = std_norm_t * xgen_sub
-            x_test_eval = std_norm_t * xtest_baseline_sub
-            
-            # --- 1. MMD ---
-            dist_train_to_test = compute_mmd(std_norm_t * x_mmd1, x_test_eval)
-            dist_gen_to_test = compute_mmd(x_gen_eval, x_test_eval)
+        # Liste von 10 Seeds (966 bleibt als Anker dabei)
+        evaluation_seeds = [966, 42, 123, 777, 1024, 2023, 3141, 8080, 9999, 12345]
+        results_records = []
 
-            # --- 2. Radial Wasserstein-1 ---
-            r_gen = torch.linalg.vector_norm(x_gen_eval, dim=1)
-            r_test = torch.linalg.vector_norm(x_test_eval, dim=1)
-            
-            r_gen_sorted = torch.sort(r_gen)[0]
-            r_test_sorted = torch.sort(r_test)[0]
-            radial_w1 = torch.abs(r_gen_sorted - r_test_sorted).mean().item()
-            
-            # --- 3. KS Statistic ---
-            # SciPy benötigt NumPy Arrays auf der CPU
-            ks_stat, _ = ks_2samp(r_gen.cpu().numpy(), r_test.cpu().numpy())
-            
-            # --- 4. Sliced Wasserstein-1 ---
-            num_projections = 500
-            dim = x_gen_eval.shape[1]
-            
-            # Directions aus PyTorch RNG sampeln und normieren
-            directions = torch.randn(dim, num_projections, device=device)
-            directions = torch.nn.functional.normalize(directions, dim=0)
-            
-            # Auf die 500 Achsen projizieren (Ergebnis: [Batch, 500])
-            proj_gen = torch.matmul(x_gen_eval, directions)
-            proj_test = torch.matmul(x_test_eval, directions)
-            
-            # Entlang der Batch-Dimension für jede der 500 Achsen sortieren
-            proj_gen_sorted = torch.sort(proj_gen, dim=0)[0]
-            proj_test_sorted = torch.sort(proj_test, dim=0)[0]
-            
-            # 1D Wasserstein pro Achse, danach Durchschnitt über alle Achsen
-            sliced_w1 = torch.abs(proj_gen_sorted - proj_test_sorted).mean().item()
+        for current_seed in evaluation_seeds:
+            with torch.no_grad():
+                np.random.seed(current_seed)
+                torch.manual_seed(current_seed)
+                random.seed(current_seed)
+                
+                # Ziehe Test- und Train-Samples mit dem aktuellen Seed
+                xtest_baseline = sampler.sampletest(2500).to(device)
+                xtest_baseline_sub = xtest_baseline[0:num_samples_for_mmd-1, :]
+                x_mmd1 = sampler.sample(xtest_baseline_sub.shape[0]).to(device)
+                
+                # Denormierte Versionen
+                x_gen_eval = std_norm_t * xgen_sub
+                x_test_eval = std_norm_t * xtest_baseline_sub
+                
+                # --- 1. MMD ---
+                dist_train_to_test = compute_mmd(std_norm_t * x_mmd1, x_test_eval)
+                dist_gen_to_test = compute_mmd(x_gen_eval, x_test_eval)
 
-        # --- 5. Baseline-Werte berechnen (Train vs. Test) ---
-        # Radial W1 (Baseline)
-        r_train = torch.linalg.vector_norm(std_norm_t * x_mmd1, dim=1)
-        r_train_sorted = torch.sort(r_train)[0]
-        radial_w1_baseline = torch.abs(r_train_sorted - r_test_sorted).mean().item()
+                # --- 2. Radial Wasserstein-1 ---
+                r_gen = torch.linalg.vector_norm(x_gen_eval, dim=1)
+                r_test = torch.linalg.vector_norm(x_test_eval, dim=1)
+                r_train = torch.linalg.vector_norm(std_norm_t * x_mmd1, dim=1)
+                
+                r_gen_sorted = torch.sort(r_gen)[0]
+                r_test_sorted = torch.sort(r_test)[0]
+                r_train_sorted = torch.sort(r_train)[0]
+                
+                radial_w1 = torch.abs(r_gen_sorted - r_test_sorted).mean().item()
+                radial_w1_baseline = torch.abs(r_train_sorted - r_test_sorted).mean().item()
+                
+                # --- 3. KS Statistic ---
+                ks_stat, _ = ks_2samp(r_gen.cpu().numpy(), r_test.cpu().numpy())
+                ks_stat_baseline, _ = ks_2samp(r_train.cpu().numpy(), r_test.cpu().numpy())
+                
+                # --- 4. Sliced Wasserstein-1 ---
+                num_projections = 500
+                dim = x_gen_eval.shape[1]
+                
+                directions = torch.randn(dim, num_projections, device=device)
+                directions = torch.nn.functional.normalize(directions, dim=0)
+                
+                proj_gen = torch.matmul(x_gen_eval, directions)
+                proj_test = torch.matmul(x_test_eval, directions)
+                proj_train = torch.matmul(std_norm_t * x_mmd1, directions)
+                
+                proj_gen_sorted = torch.sort(proj_gen, dim=0)[0]
+                proj_test_sorted = torch.sort(proj_test, dim=0)[0]
+                proj_train_sorted = torch.sort(proj_train, dim=0)[0]
+                
+                sliced_w1 = torch.abs(proj_gen_sorted - proj_test_sorted).mean().item()
+                sliced_w1_baseline = torch.abs(proj_train_sorted - proj_test_sorted).mean().item()
+
+                # Speichere die Ergebnisse dieses Durchlaufs
+                results_records.append({
+                    "Seed": current_seed,
+                    "MMD_Base": dist_train_to_test.sqrt().item(),
+                    "MMD_Mod": dist_gen_to_test.sqrt().item(),
+                    "RadW1_Base": radial_w1_baseline,
+                    "RadW1_Mod": radial_w1,
+                    "SW1_Base": sliced_w1_baseline,
+                    "SW1_Mod": sliced_w1,
+                    "KS_Base": ks_stat_baseline,
+                    "KS_Mod": ks_stat,
+                    # Raw Items (ohne sqrt) für die globalen Arrays
+                    "raw_mmd_base": dist_train_to_test.item(),
+                    "raw_mmd_mod": dist_gen_to_test.item()
+                })
+
+        # --- 5. Tabelle ausgeben ---
+        df_results = pd.DataFrame(results_records)
         
-        # KS Statistic (Baseline)
-        ks_stat_baseline, _ = ks_2samp(r_train.cpu().numpy(), r_test.cpu().numpy())
+        print("\n" + "="*95)
+        print("EVALUATION RESULTS ACROSS 10 SEEDS")
+        print("="*95)
+        # Die rohen MMD-Werte blenden wir für die hübsche Print-Tabelle aus
+        print(df_results.drop(columns=["raw_mmd_base", "raw_mmd_mod"]).to_string(index=False, float_format="{:.5f}".format))
+        print("="*95)
         
-        # Sliced W1 (Baseline)
-        proj_train = torch.matmul(std_norm_t * x_mmd1, directions)
-        proj_train_sorted = torch.sort(proj_train, dim=0)[0]
-        sliced_w1_baseline = torch.abs(proj_train_sorted - proj_test_sorted).mean().item()
+        # --- 6. Durchschnittswerte berechnen und ausgeben ---
+        mean_results = df_results.mean().to_dict()
+        
+        print("\nAVERAGE OVER ALL SEEDS:")
+        for k, v in mean_results.items():
+            if k not in ["Seed", "raw_mmd_base", "raw_mmd_mod"]:
+                print(f"{k:15s}: {v:.6f}")
+        print("="*95 + "\n")
 
-        # --- 6. Werte in die Tensoren schreiben ---
-    
-    # MMD speichern
-    mmd_ref[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = dist_train_to_test.item()
-
-    # Modell-Werte speichern (aufgeteilt nach SGM / MSGM)
-    if MSGM:
-        mmd_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = dist_gen_to_test.item()
-        rad_w1_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = radial_w1
-        sliced_w1_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = sliced_w1
-        ks_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = float(ks_stat)
-    else:
-        mmd_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = dist_gen_to_test.item()
+        # --- 7. Werte in die globalen Tensoren schreiben (Mittelwerte) ---
+        # Wir speichern die gemittelten Werte, damit die restlichen Plots funktionieren
+        
+        # MMD speichern (Hier wird der rohe Durchschnitt gespeichert, nicht der sqrt-Durchschnitt)
+        mmd_ref[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = mean_results["raw_mmd_base"]
 
 
+        # Modell-Werte speichern (aufgeteilt nach SGM / MSGM)
+        if MSGM:
+            mmd_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = mean_results["raw_mmd_mod"]
+            rad_w1_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = mean_results["RadW1_Mod"]
+            sliced_w1_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = mean_results["SW1_Mod"]
+            ks_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = float(mean_results["KS_Mod"])
+        else:
+            mmd_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = mean_results["raw_mmd_mod"]
+            # ACHTUNG: Hier ggf. rad_w1_SGM etc. ergänzen, falls du sie oben initialisiert hast!
+            # rad_w1_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = mean_results["RadW1_Mod"]
+            # sliced_w1_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = mean_results["SW1_Mod"]
+            # ks_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = float(mean_results["KS_Mod"])
             
-        # --- 7. Konsolenausgabe ---
-        print(f"MMD train to test (BASELINE) = {dist_train_to_test.sqrt().item():.6f}")
-        print(f"MMD gen. to test (MODELL)    = {dist_gen_to_test.sqrt().item():.6f}\n")
-        
-        print(f"Radial W1 (BASELINE)         = {radial_w1_baseline:.6f}")
-        print(f"Radial W1 (MODELL)           = {radial_w1:.6f}\n")
-        
-        print(f"Sliced W1 (BASELINE)         = {sliced_w1_baseline:.6f}")
-        print(f"Sliced W1 (MODELL)           = {sliced_w1:.6f}\n")
-        
-        print(f"KS Stat (BASELINE)           = {ks_stat_baseline:.6f}")
-        print(f"KS Stat (MODELL)             = {ks_stat:.6f}\n")
-
     # =================================================================
     # ANIMATION: 4 GIFs erzeugen (jedes 4. Frame + Start & Ende)
     # =================================================================
