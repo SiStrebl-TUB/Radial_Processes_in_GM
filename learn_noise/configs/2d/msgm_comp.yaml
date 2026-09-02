@@ -33,11 +33,11 @@ baseline_kac_lookup_M: 5000
 baseline_kac_lookup_K: 1024
 quantile_checkpoint: null
 freeze_quantile: false
-eval_step: 5000             # Öfter evaluieren, da das Training viel schneller durchläuft
+eval_step: 50000             # Öfter evaluieren, da das Training viel schneller durchläuft
 eval_sample: 20000
 eval_batch: 10000
 big_eval_samples: 100000
-big_eval_step: 20000
+big_eval_step: 50000
 num_steps_eval: 100
 name: null
 mode: fm_and_quantile
