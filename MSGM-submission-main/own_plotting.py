@@ -607,18 +607,19 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         sliced_w1_baseline = torch.abs(proj_train_sorted - proj_test_sorted).mean().item()
 
         # --- 6. Werte in die Tensoren schreiben ---
-        
-        # MMD speichern
-        mmd_ref[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = dist_train_to_test.item()
+    
+    # MMD speichern
+    mmd_ref[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = dist_train_to_test.item()
 
-        # Modell-Werte speichern (aufgeteilt nach SGM / MSGM)
-        if MSGM:
-            mmd_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = dist_gen_to_test.item()
-            rad_w1_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = radial_w1
-            sliced_w1_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = sliced_w1
-            ks_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = ks_stat
-        else:
-            mmd_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = dist_gen_to_test.item()
+    # Modell-Werte speichern (aufgeteilt nach SGM / MSGM)
+    if MSGM:
+        mmd_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = dist_gen_to_test.item()
+        rad_w1_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = radial_w1
+        sliced_w1_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = sliced_w1
+        ks_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = float(ks_stat)
+    else:
+        mmd_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = dist_gen_to_test.item()
+
 
             
         # --- 7. Konsolenausgabe ---
