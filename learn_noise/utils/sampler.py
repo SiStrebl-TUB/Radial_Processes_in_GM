@@ -2072,9 +2072,76 @@ class MSGM_PIV(BaseDistribution2D):
         idx = torch.randint(0, self.data_test.shape[0], (n,))
         x = self.data_test[idx]
         return x.to(device=device, dtype=dtype)
+    
+
+class Toy2DCross(BaseDistribution2D):
+    has_log_prob: bool = False
+
+    def __init__(self, scale: float = 1.0, kappa: float = 5.0, nu: float = 3.0):
+        # Basis-Parameter
+        self.dim = 2
+        self.scale = scale
+        self.kappa = kappa
+        self.nu = nu
+        
+        # 4 angular modes, uniform spaced on [0, 2pi) -> 0, pi/2, pi, 3pi/2
+        self.mode_centers = torch.tensor([0.0, math.pi / 2.0, math.pi, 3.0 * math.pi / 2.0])
+        
+        # Gaussian approximation to von Mises with concentration kappa
+        # For large kappa, variance is approx 1/kappa. Standard deviation is sqrt(1/kappa)
+        self.theta_std = math.sqrt(1.0 / self.kappa)
+        
+        # Student-t distribution for the radius
+        self.t_dist = torch.distributions.StudentT(df=self.nu)
+
+    def to(self, device):
+        device = torch.device(device)
+        self.mode_centers = self.mode_centers.to(device)
+        return self
+        
+    def sample(
+        self,
+        n: int,
+        device: Optional[torch.device | str] = None,
+        dtype: Optional[torch.dtype] = None,
+    ) -> Tensor:
+        # Falls ihr _as_device_dtype in eurer Library nutzt, 
+        # kann das hier entsprechend angepasst werden.
+        if device is None:
+            device = self.mode_centers.device
+            
+        # 1. Ziehe Radius r = |Student-t(nu=3)| * scale
+        # Sorge dafür, dass r auf dem richtigen Device liegt
+        r_raw = self.t_dist.sample((n,)).to(device)
+        r = torch.abs(r_raw) * self.scale
+        
+        # 2. Ziehe Winkel theta
+        # Wähle für jeden Punkt zufällig (uniform) einen der 4 Arme
+        mode_idx = torch.randint(0, 4, (n,), device=device)
+        mu = self.mode_centers[mode_idx]
+        
+        # Addiere das Gaußsche Rauschen (Approximation der von Mises Verteilung)
+        theta_noise = torch.randn(n, device=device) * self.theta_std
+        theta = mu + theta_noise
+        
+        # 3. Umwandlung von Polar- in Kartesische Koordinaten (X = r * [cos theta, sin theta]^T)
+        x = r * torch.cos(theta)
+        y = r * torch.sin(theta)
+        
+        samples = torch.stack([x, y], dim=1)
+        
+        if dtype is not None:
+            samples = samples.to(dtype=dtype)
+            
+        return samples
+
+    def log_prob(self, x: Tensor) -> Tensor:
+        raise NotImplementedError("Exact log_prob is not available for this mixture distribution.")
 
 def get_distribution(name: str, **kwargs):
     name = name.lower()
+    if name in {"toycross", "toy-cross", "cross"}:
+        return Toy2DCross(**kwargs)
     if name in {"msgm_swissroll", "msgm-swissroll"}:
         return MSGM_SwissRoll(**kwargs)
     if name in {"msgm_gaussian", "msgm-gaussian"}:

@@ -1,28 +1,28 @@
-# Angepasste joint-training configuration für PIV (U-Net)
+# Angepasste joint-training configuration für 2D Toy Dataset (MLP)
 seed: 1
 device: cuda
-target_dataset: msgm_piv # override via --override target_dataset=...
-dim: 1024
+target_dataset: toycross   # WICHTIG: Ersetze das durch den String, unter dem du die Klasse registrierst
+dim: 2                      # Zwingend 2 für das 2D-Dataset
 
-# === ÄNDERUNGEN FÜR DAS U-NET ===
-hidden_size: 0              # Vorher 64 -> 0 triggert das U-Net
-hidden_layers: 0            # Vorher 3 -> 0 triggert das U-Net
-image_shape: [1, 32, 32]    # Vorher null -> Zwingend nötig für Convolutions (1 Kanal, 32x32)
+# === ÄNDERUNGEN FÜR DAS MLP ===
+hidden_size: 64             # Wieder auf 64 (oder 128) setzen für MLP
+hidden_layers: 3            # Wieder auf 3 (oder 4) setzen für MLP
+image_shape: null           # Wieder null, da MLPs flache Vektoren erwarten, keine 2D-Bilder
 # ================================
 
 time_embedding: sinusoidal
 concat_t_emb: true
-lr: 0.001                   # Hinweis: Falls das U-Net explodiert (Loss = NaN), setze das auf 0.0002 runter
-batch_size: 128
-epochs: 100000              # 200000 für heavy tails
+lr: 0.001
+batch_size: 128            # Bei 2D-Toy-Datasets kann man problemlos große Batches (1024) nehmen
+epochs: 100000               # Für ein 2D-Modell reichen meist 20.000 bis 50.000 Iterationen völlig
 model_grad_clip: 1.0
 ema: 0.999
 ema_start_step: 0
 
 strat_ot: false 
-use_minibatch_ot: true     # minibatch OT for linear FM models
+use_minibatch_ot: false      # minibatch OT for linear FM models
 slerp: true
-baseline_flow: target_norm_emp # linear for linear FM models, target_norm_emp for spherical models
+baseline_flow: target_norm_emp # Target-Norm bleibt, um das Sphären-Verhalten zu testen
 baseline_latent: gaussian
 baseline_flow_T: 1.0
 baseline_mmd_b: 1.0
@@ -33,11 +33,11 @@ baseline_kac_lookup_M: 5000
 baseline_kac_lookup_K: 1024
 quantile_checkpoint: null
 freeze_quantile: false
-eval_step: 10000
+eval_step: 5000             # Öfter evaluieren, da das Training viel schneller durchläuft
 eval_sample: 20000
 eval_batch: 10000
 big_eval_samples: 100000
-big_eval_step: 50000
+big_eval_step: 20000
 num_steps_eval: 100
 name: null
 mode: fm_and_quantile
