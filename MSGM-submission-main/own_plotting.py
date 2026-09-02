@@ -577,7 +577,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         else:
             mmd_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = val_dist
 
-    """    # =================================================================
+    # =================================================================
     # ANIMATION: 4 GIFs erzeugen (jedes 4. Frame + Start & Ende)
     # =================================================================
     import shutil
@@ -591,7 +591,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     clean_name = os.path.basename(name_simu)
     
     # Wie viele GIFs wollen wir maximal? (4 Stück)
-    num_gifs = min(4, xs.shape[1]) 
+    num_gifs = min(2, xs.shape[1]) 
     
     for sample_idx in range(num_gifs):
         print(f"\nGeneriere GIF für Sample {sample_idx+1}/{num_gifs}...")
@@ -641,4 +641,4 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         shutil.rmtree(temp_dir)
         print(f"-> Gespeichert: {gif_path}")
         
-    print("\nAlle 4 GIFs wurden erfolgreich erstellt und die Temp-Ordner aufgeräumt!\n")"""
+    print("\nAlle 2 GIFs wurden erfolgreich erstellt und die Temp-Ordner aufgeräumt!\n")
