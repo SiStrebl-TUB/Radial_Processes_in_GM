@@ -551,7 +551,7 @@ if __name__ == '__main__':
                                                             pdf_theor, log_scale_pdf, columns_plot, \
                                                             scatter_plots, denoising_plots, include_t0_reverse, plt_show, dpi, height_seaborn, ssize, \
                                                             evalmmmd, justLoadmmmd, justLoad, save_results, lmbd, val_hist, device, \
-                                                            mmd_ref, mmd_MSGM,mmd_SGM,max_num_samples_for_mmd)
+                                                            mmd_ref, mmd_MSGM,mmd_SGM,max_num_samples_for_mmd, model_name)
 
                     ## Convergence plots (with MMD)
 

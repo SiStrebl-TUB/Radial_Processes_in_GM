@@ -416,7 +416,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
                    pdf_theor, log_scale_pdf, columns_plot,
                    scatter_plots, denoising_plots, include_t0_reverse, plt_show, dpi, height_seaborn, ssize,
                    evalmmmd, justLoadmmmd, justLoad, save_results, lmbd, val_hist, device,
-                   mmd_ref, mmd_MSGM, mmd_SGM, max_num_samples_for_mmd, offset_dimplot=0):
+                   mmd_ref, mmd_MSGM, mmd_SGM, max_num_samples_for_mmd, offset_dimplot=0, model_name=""):
 
     xtest = xtest.to(device)
     xgen = xs[-1, :, :].to(device)
@@ -625,7 +625,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
             
             frames.append(Image.open(frame_path))
             
-        gif_path = os.path.join(gif_dir, f"sample{sample_idx+1}_{name_simu}.gif")
+        gif_path = os.path.join(gif_dir, f"sample{sample_idx+1}_{model_name}.gif")
         
         # Dauer anpassen: Da wir nur 1/4 der Frames haben, zeigen wir jedes Frame etwas länger (z.B. 150ms), 
         # damit die Animation insgesamt gut sichtbar bleibt und nicht in 1 Sekunde vorbei ist.
