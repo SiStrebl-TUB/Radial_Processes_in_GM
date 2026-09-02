@@ -298,7 +298,7 @@ def heavy_eval_batched(
 
         log_distributions_to_wandb(curr_x_gen_global, curr_gt_global, target_name, step)
         
-        loss_fn = SamplesLoss("sinkhorn", p=2, blur=0.05/scale, scaling=0.9)
+        loss_fn = SamplesLoss("sinkhorn", p=2, blur=0.05/scale, scaling=0.9, backend = "tensorized")
         sinkhorn_dist = loss_fn(x_gen_scaled, gt_scaled)       
         wandb.log({f"eval/sinkhorn_{target_name}": sinkhorn_dist.item()}, step=step)
     """if target_name not in {"radialpareto", "funnel"}: # Re-enabled for funnel assuming z-scores!
