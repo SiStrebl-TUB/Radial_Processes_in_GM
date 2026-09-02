@@ -621,19 +621,22 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         df_results = pd.DataFrame(results_records)
         
         print("\n" + "="*95)
-        print("EVALUATION RESULTS ACROSS 10 SEEDS")
+        print(f"EVALUATION RESULTS ACROSS {len(evaluation_seeds)} SEEDS")
         print("="*95)
         # Die rohen MMD-Werte blenden wir für die hübsche Print-Tabelle aus
         print(df_results.drop(columns=["raw_mmd_base", "raw_mmd_mod"]).to_string(index=False, float_format="{:.5f}".format))
         print("="*95)
         
-        # --- 6. Durchschnittswerte berechnen und ausgeben ---
+        # --- 6. Durchschnittswerte und Std-Abweichung berechnen und ausgeben ---
         mean_results = df_results.mean().to_dict()
+        std_results = df_results.std().to_dict()
         
-        print("\nAVERAGE OVER ALL SEEDS:")
-        for k, v in mean_results.items():
+        print("\nAVERAGE OVER ALL SEEDS (Mean +/- Std):")
+        for k in mean_results.keys():
             if k not in ["Seed", "raw_mmd_base", "raw_mmd_mod"]:
-                print(f"{k:15s}: {v:.6f}")
+                m_val = mean_results[k]
+                s_val = std_results[k]
+                print(f"{k:15s}: {m_val:.6f} +/- {s_val:.6f}")
         print("="*95 + "\n")
 
         # --- 7. Werte in die globalen Tensoren schreiben (Mittelwerte) ---
@@ -655,7 +658,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
             # rad_w1_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = mean_results["RadW1_Mod"]
             # sliced_w1_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = mean_results["SW1_Mod"]
             # ks_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = float(mean_results["KS_Mod"])
-            
+
     # =================================================================
     # ANIMATION: 4 GIFs erzeugen (jedes 4. Frame + Start & Ende)
     # =================================================================
