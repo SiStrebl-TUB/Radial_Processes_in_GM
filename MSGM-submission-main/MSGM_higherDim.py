@@ -203,6 +203,9 @@ if __name__ == '__main__':
         mmd_SGM = torch.zeros((len(dims),len(Res),len(num_stepss_backward),len(iterationss),nruns_mmd))
         mmd_MSGM = torch.zeros((len(dims),len(Res),len(num_stepss_backward),len(iterationss),nruns_mmd))
         mmd_ref = torch.zeros((len(dims),len(Res),len(num_stepss_backward),len(iterationss),nruns_mmd))
+        rad_w1_MSGM = torch.zeros((len(dims),len(Res),len(num_stepss_backward),len(iterationss),nruns_mmd))
+        sliced_w1_MSGM = torch.zeros((len(dims),len(Res),len(num_stepss_backward),len(iterationss),nruns_mmd))
+        ks_MSGM = torch.zeros((len(dims),len(Res),len(num_stepss_backward),len(iterationss),nruns_mmd))
 
         i_Res = -1
         for Re in Res:
@@ -551,7 +554,7 @@ if __name__ == '__main__':
                                                             pdf_theor, log_scale_pdf, columns_plot, \
                                                             scatter_plots, denoising_plots, include_t0_reverse, plt_show, dpi, height_seaborn, ssize, \
                                                             evalmmmd, justLoadmmmd, justLoad, save_results, lmbd, val_hist, device, \
-                                                            mmd_ref, mmd_MSGM,mmd_SGM,max_num_samples_for_mmd, model_name = model_name)
+                                                            mmd_ref, mmd_MSGM,mmd_SGM, rad_w1_MSGM, sliced_w1_MSGM, ks_MSGM, max_num_samples_for_mmd, model_name = model_name)
 
                     ## Convergence plots (with MMD)
 
