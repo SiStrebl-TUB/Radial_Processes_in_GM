@@ -11,6 +11,7 @@ import pandas as pd
 import random
 from typing import Optional, Tuple, Dict, Any
 from PIL import Image
+from scipy.stats import ks_2samp
 
 from quantitative_comparison import compute_mmd
 
@@ -416,7 +417,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
                    pdf_theor, log_scale_pdf, columns_plot,
                    scatter_plots, denoising_plots, include_t0_reverse, plt_show, dpi, height_seaborn, ssize,
                    evalmmmd, justLoadmmmd, justLoad, save_results, lmbd, val_hist, device,
-                   mmd_ref, mmd_MSGM, mmd_SGM, max_num_samples_for_mmd, offset_dimplot=0, model_name=""):
+                   mmd_ref, mmd_MSGM, mmd_SGM, rad_w1_MSGM, sliced_w1_MSGM, ks_MSGM, max_num_samples_for_mmd, offset_dimplot=0, model_name=""):
 
     xtest = xtest.to(device)
     xgen = xs[-1, :, :].to(device)
@@ -538,44 +539,100 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     # =================================================================
     if evalmmmd and not justLoadmmmd:
         num_samples_for_mmd = min([xtest.shape[0], max_num_samples_for_mmd])
-        print(f"Evaluating MMD with {num_samples_for_mmd} samples (max_num_samples_for_mmd={max_num_samples_for_mmd})")
+        print(f"Evaluating Metrics with {num_samples_for_mmd} samples")
         
         xgen_sub = xgen[0:num_samples_for_mmd-1, :]
         std_norm_t = torch.as_tensor(std_norm, device=device, dtype=xtest.dtype)
 
         with torch.no_grad():
-            # 1. Isoliere den RNG-State
             np.random.seed(966)
             torch.manual_seed(966)
             random.seed(966)
             
-            # 2. Ziehe BEIDE Sets neu für fairen Vergleich & ~1.4 Baseline
             xtest_baseline = sampler.sampletest(2500).to(device)
             xtest_baseline_sub = xtest_baseline[0:num_samples_for_mmd-1, :]
-            
             x_mmd1 = sampler.sample(xtest_baseline_sub.shape[0]).to(device)
             
-            # 3. MMD Baseline (Train vs Test auf Seed 966)
-            dist_train_to_test = compute_mmd(std_norm_t * x_mmd1, std_norm_t * xtest_baseline_sub)
+            # Denormierte Versionen für die Metriken (wie beim MMD)
+            x_gen_eval = std_norm_t * xgen_sub
+            x_test_eval = std_norm_t * xtest_baseline_sub
             
-            # 4. MMD Modell (Gen vs Test auf Seed 966) -> Äpfel mit Äpfeln!
-            dist_gen_to_test = compute_mmd(std_norm_t * xgen_sub, std_norm_t * xtest_baseline_sub)
+            # --- 1. MMD ---
+            dist_train_to_test = compute_mmd(std_norm_t * x_mmd1, x_test_eval)
+            dist_gen_to_test = compute_mmd(x_gen_eval, x_test_eval)
 
-        # Baseline-Wert speichern
-        val_to_save = dist_train_to_test.item() if isinstance(mmd_ref, np.ndarray) else dist_train_to_test
-        mmd_ref[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = val_to_save
+            # --- 2. Radial Wasserstein-1 ---
+            r_gen = torch.linalg.vector_norm(x_gen_eval, dim=1)
+            r_test = torch.linalg.vector_norm(x_test_eval, dim=1)
+            
+            r_gen_sorted = torch.sort(r_gen)[0]
+            r_test_sorted = torch.sort(r_test)[0]
+            radial_w1 = torch.abs(r_gen_sorted - r_test_sorted).mean().item()
+            
+            # --- 3. KS Statistic ---
+            # SciPy benötigt NumPy Arrays auf der CPU
+            ks_stat, _ = ks_2samp(r_gen.cpu().numpy(), r_test.cpu().numpy())
+            
+            # --- 4. Sliced Wasserstein-1 ---
+            num_projections = 500
+            dim = x_gen_eval.shape[1]
+            
+            # Directions aus PyTorch RNG sampeln und normieren
+            directions = torch.randn(dim, num_projections, device=device)
+            directions = torch.nn.functional.normalize(directions, dim=0)
+            
+            # Auf die 500 Achsen projizieren (Ergebnis: [Batch, 500])
+            proj_gen = torch.matmul(x_gen_eval, directions)
+            proj_test = torch.matmul(x_test_eval, directions)
+            
+            # Entlang der Batch-Dimension für jede der 500 Achsen sortieren
+            proj_gen_sorted = torch.sort(proj_gen, dim=0)[0]
+            proj_test_sorted = torch.sort(proj_test, dim=0)[0]
+            
+            # 1D Wasserstein pro Achse, danach Durchschnitt über alle Achsen
+            sliced_w1 = torch.abs(proj_gen_sorted - proj_test_sorted).mean().item()
+
+        # --- 5. Baseline-Werte berechnen (Train vs. Test) ---
+        # Radial W1 (Baseline)
+        r_train = torch.linalg.vector_norm(std_norm_t * x_mmd1, dim=1)
+        r_train_sorted = torch.sort(r_train)[0]
+        radial_w1_baseline = torch.abs(r_train_sorted - r_test_sorted).mean().item()
         
-        # Ausgaben in der Konsole
-        print(f"MMD train to test (BASELINE) = {dist_train_to_test.sqrt().item():.6f}")
-        print(f"MSGM = {MSGM}")
-        print(f"MMD gen. to test (MODELL)    = {dist_gen_to_test.sqrt().item():.6f}")
+        # KS Statistic (Baseline)
+        ks_stat_baseline, _ = ks_2samp(r_train.cpu().numpy(), r_test.cpu().numpy())
         
-        # Modell-Wert speichern
-        val_dist = dist_gen_to_test.item() if isinstance(mmd_MSGM, np.ndarray) else dist_gen_to_test
+        # Sliced W1 (Baseline)
+        proj_train = torch.matmul(std_norm_t * x_mmd1, directions)
+        proj_train_sorted = torch.sort(proj_train, dim=0)[0]
+        sliced_w1_baseline = torch.abs(proj_train_sorted - proj_test_sorted).mean().item()
+
+        # --- 6. Werte in die Tensoren schreiben ---
+        
+        # MMD speichern
+        mmd_ref[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = dist_train_to_test.item()
+
+        # Modell-Werte speichern (aufgeteilt nach SGM / MSGM)
         if MSGM:
-            mmd_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = val_dist
+            mmd_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = dist_gen_to_test.item()
+            rad_w1_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = radial_w1
+            sliced_w1_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = sliced_w1
+            ks_MSGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = ks_stat
         else:
-            mmd_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = val_dist
+            mmd_SGM[i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run] = dist_gen_to_test.item()
+
+            
+        # --- 7. Konsolenausgabe ---
+        print(f"MMD train to test (BASELINE) = {dist_train_to_test.sqrt().item():.6f}")
+        print(f"MMD gen. to test (MODELL)    = {dist_gen_to_test.sqrt().item():.6f}\n")
+        
+        print(f"Radial W1 (BASELINE)         = {radial_w1_baseline:.6f}")
+        print(f"Radial W1 (MODELL)           = {radial_w1:.6f}\n")
+        
+        print(f"Sliced W1 (BASELINE)         = {sliced_w1_baseline:.6f}")
+        print(f"Sliced W1 (MODELL)           = {sliced_w1:.6f}\n")
+        
+        print(f"KS Stat (BASELINE)           = {ks_stat_baseline:.6f}")
+        print(f"KS Stat (MODELL)             = {ks_stat:.6f}\n")
 
     # =================================================================
     # ANIMATION: 4 GIFs erzeugen (jedes 4. Frame + Start & Ende)
