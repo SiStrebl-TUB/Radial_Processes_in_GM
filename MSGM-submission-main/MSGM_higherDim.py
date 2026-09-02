@@ -73,7 +73,7 @@ print_every = 10000
 
 # Inference
 include_t0_reverse = True # for plots
-num_samples = 1000
+num_samples = 2500
 max_num_samples_for_mmd = num_samples
 evalmmmd = True
 first_run = True
@@ -338,7 +338,7 @@ if __name__ == '__main__':
                                 iterations = max([1,iterations])
                             else:  
                                 iterations = iterations_ref
-                            num_samples_init = 1000 
+                            num_samples_init = 2500 
                         
                             drift_q = MLP(input_dim=sampler.dim, index_dim=1, hidden_dim=128, premodule = premodule).to(device)
                             T = torch.nn.Parameter(torch.FloatTensor([T0]), requires_grad=False)
