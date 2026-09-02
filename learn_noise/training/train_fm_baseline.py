@@ -1010,7 +1010,6 @@ def train_fm_baseline(
     print(f"use_minibatch_ot: {use_minibatch_ot}")
     print("Starte Trainingsloop...")
 
-
     ##############################################################################
     #######################___TRAINING LOOP___####################################
     ##############################################################################
@@ -1021,19 +1020,16 @@ def train_fm_baseline(
         model.train()
         optimizer.zero_grad(set_to_none=True)
         pairing_cost = None
+        
         if strat_ot:
-            x_0 = x_target_shuffled[start_idx:end_idx].to(device)#sampler.sample(args.batch_size, device=device, dtype=torch.float32)
+            x_0 = x_target_shuffled[start_idx:end_idx].to(device)
         else:
             x_0 = sampler.sample(args.batch_size, device=device, dtype=torch.float32)
 
         if getattr(args, "is_msgm", False):
-            # ==========================================
-            # MSGM SCORE MATCHING LOOP
-            # ==========================================
-            # MSGM calculates the noise, time sampling, and loss internally!
             loss_mse = model.ssm(x_0).mean()
             loss = loss_mse
-            
+
             loss.backward()
             grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.model_grad_clip)
             optimizer.step()
@@ -1043,7 +1039,7 @@ def train_fm_baseline(
         else: 
             if x_0.dim() > 2:
                 x_0 = x_0.view(x_0.shape[0], -1)
-            
+
             t = torch.rand(args.batch_size, 1, device=device)
             t_actual = t.squeeze(1) * flow_T
 
@@ -1053,7 +1049,7 @@ def train_fm_baseline(
                 if use_minibatch_ot:
                     idx_best, transport_plan = minibatch_ot_pairing(x_0, z)
                     x_0 = x_0[idx_best]
-            
+
                     pairing_cost = transport_plan.max(dim=0).values.mean()
                 x_t = (1.0 - t) * x_0 + t * z
                 velocity_target = -x_0 + z
@@ -1098,55 +1094,77 @@ def train_fm_baseline(
 
             elif flow_type in {"target_norm", "target_norm_emp", "target_norm_interp"}:
                 use_minibatch_ot = getattr(args, "use_minibatch_ot", False)
-
                 f = 1.0 - t
                 g = t
                 f_deriv = -1.0
                 g_deriv = 1.0
-                uni = torch.randn(size = (args.batch_size, args.dim), device = device)
-                uni = torch.nn.functional.normalize(uni)
-                # For slerp, use x_0 norms directly (no need for sampled_norm)
 
-                # tuning down to log1p size
+                # 1. Daten-Preprocessing für den aktuellen Minibatch
                 if not strat_ot:
-                    uni = torch.randn(size = (args.batch_size, args.dim), device = device)
-                    uni = torch.nn.functional.normalize(uni)
-                    x_0_norm = torch.linalg.vector_norm(x_0, dim = 1).reshape(-1,1)
+                    x_0_norm = torch.linalg.vector_norm(x_0, dim=1).reshape(-1,1)
                     x_0_log1p = torch.log1p(x_0_norm).reshape(-1,1)
                     x_0 = x_0 / (x_0_norm + 1e-8) * x_0_log1p
-                    x0_lognorms = torch.linalg.vector_norm(x_0, dim = 1)
-                    noise = x0_lognorms.unsqueeze(1) * uni
-                else: 
-                    x0_lognorms = torch.linalg.vector_norm(x_0, dim = 1)
-                    noise = x_noise_shuffled[start_idx:end_idx]
+                x0_lognorms = torch.linalg.vector_norm(x_0, dim=1)
 
                 if use_minibatch_ot:
-                    # 1. Normieren: Reine Richtungen auf der Einheitssphäre extrahieren
-                    x_0_unit = torch.nn.functional.normalize(x_0, dim=1)
-                    noise_unit = torch.nn.functional.normalize(noise, dim=1)
+                    # Parameter für den Puffer dynamisch setzen
+                    ot_buf_size = getattr(args, "ot_buffer_size", 4096)
+                    chunk_steps = max(1, ot_buf_size // args.batch_size)
 
-                    # 2. Zuordnung machen: Optimalen Transport-Plan via Cosinus-Ähnlichkeit finden
-                    # spherical_ot_pairing liefert die Indizes zur Umordnung von set_b (noise_unit)
-                    idx_best = sliced_ot_pairing(x_0_unit, noise_unit)
+                    # 2. Puffer füllen (nur alle 32 Schritte)
+                    if not hasattr(args, "ot_noise_buffer") or (step % chunk_steps == 0):
+                        with torch.no_grad():
+                            # Schutz gegen Out-of-Bounds am Ende des Trainings
+                            actual_buf_size = min(ot_buf_size, (args.epochs * args.batch_size) - start_idx)
+                            
+                            # A. Target-Daten für den Puffer generieren/laden
+                            if strat_ot:
+                                x_0_buf = x_target_shuffled[start_idx : start_idx + actual_buf_size].to(device)
+                            else:
+                                x_0_buf = sampler.sample(actual_buf_size, device=device, dtype=torch.float32)
+                                x_0_norm_buf = torch.linalg.vector_norm(x_0_buf, dim=1).reshape(-1,1)
+                                x_0_log1p_buf = torch.log1p(x_0_norm_buf).reshape(-1,1)
+                                x_0_buf = x_0_buf / (x_0_norm_buf + 1e-8) * x_0_log1p_buf
+                            x0_lognorms_buf = torch.linalg.vector_norm(x_0_buf, dim=1)
+                            
+                            # B. Noise für den gesamten Puffer bereitstellen
+                            if strat_ot:
+                                noise_raw_buf = x_noise_shuffled[start_idx : start_idx + actual_buf_size].to(device)
+                                noise_unit_buf = torch.nn.functional.normalize(noise_raw_buf, dim=1)
+                            else:
+                                uni_buf = torch.randn(size=(actual_buf_size, args.dim), device=device)
+                                noise_unit_buf = torch.nn.functional.normalize(uni_buf, dim=1)
 
-                    # 3. Permutieren: Noise-Richtungen an x_0 anpassen
-                    noise_unit_matched = noise_unit[idx_best]
+                            # C. Sliced OT über den 4096er Puffer ausführen
+                            x_0_unit_buf = torch.nn.functional.normalize(x_0_buf, dim=1)
+                            idx_best = sliced_ot_pairing(x_0_unit_buf, noise_unit_buf)
+                            
+                            # D. Paare zusammenfügen und global abspeichern
+                            matched_noise_unit = noise_unit_buf[idx_best]
+                            args.ot_noise_buffer = matched_noise_unit * x0_lognorms_buf.unsqueeze(1)
 
-                    # 4. Zurückskalieren: Den gematchten Richtungen die Radii des zugehörigen x_0 geben
-                    # (x0_lognorms wurde im Code darüber bereits berechnet)
-                    noise = noise_unit_matched * x0_lognorms.unsqueeze(1)
+                            # Diagnose speichern
+                            cos_sim = (x_0_unit_buf * matched_noise_unit).sum(dim=1)
+                            args.buffered_pairing_cost = (1.0 - cos_sim).mean().item()
 
-                    # Optional: Die Kostenberechnung
-                    # Cosinus-Ähnlichkeit der optimal zugeordneten Paare berechnen
-                    cos_sim = (x_0_unit * noise_unit_matched).sum(dim=1)
+                    # 3. Zerteilen für das Modell: Aktuellen Minibatch aus Puffer holen
+                    local_start = (step % chunk_steps) * args.batch_size
+                    local_end = local_start + args.batch_size
+                    
+                    noise = args.ot_noise_buffer[local_start:local_end]
+                    pairing_cost = args.buffered_pairing_cost
 
-                    # Als Kosten-Metrik (0 = identische Richtung, 2 = exakt entgegengesetzt)
-                    pairing_cost = (1.0 - cos_sim).mean().item() 
+                else:
+                    # Fallback ohne Minibatch OT
+                    if not strat_ot:
+                        uni = torch.randn(size=(args.batch_size, args.dim), device=device)
+                        uni = torch.nn.functional.normalize(uni)
+                        noise = x0_lognorms.unsqueeze(1) * uni
+                    else: 
+                        noise = x_noise_shuffled[start_idx:end_idx].to(device)
 
-                    # Alternativ als echter durchschnittlicher Winkel (Bogenmaß):
-                    #pairing_cost = torch.acos(torch.clamp(cos_sim, -0.999, 0.999)).mean().item()
 
-                elif args.slerp:
+                if args.slerp:
                     # Full radius matching: x_0 and noise are already perfectly aligned by construction
                     # (noise = x_0_norm * uni, so ||noise|| = ||x_0||)
                     # Compute angle omega between x_0 and noise using simplified formula
