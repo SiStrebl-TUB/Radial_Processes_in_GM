@@ -545,7 +545,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         std_norm_t = torch.as_tensor(std_norm, device=device, dtype=xtest.dtype)
 
         # Liste von 10 Seeds (966 bleibt als Anker dabei)
-        evaluation_seeds = [966, 41, 122, 776, 1023, 2022, 3140, 8081, 9998, 12344]
+        evaluation_seeds = [966, 41, 122, 776, 1023, 2022, 3140, 8081, 9998, 12344, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         results_records = []
 
         for current_seed in evaluation_seeds:

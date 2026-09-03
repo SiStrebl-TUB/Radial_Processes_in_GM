@@ -288,7 +288,7 @@ def heavy_eval_batched(
     # 1. SINKHORN DISTANCE (Skip for funnel if numerical instability is too high, 
     # but strictly evaluating on z-scores usually makes it safe!)
     # =====================================================================
-    if target_name not in {"radialpareto", "funnel"}: # Re-enabled for funnel assuming z-scores!
+    if target_name not in {"radialpareto", "funnel", "toycross"}: # Re-enabled for funnel assuming z-scores!
         z = torch.cat((curr_x_gen_global, curr_gt_global), dim=0)
         offset = z.mean(dim=0)
         scale = 10 * (z - offset).abs().mean().detach() + 1e-6
@@ -391,6 +391,82 @@ def heavy_eval_batched(
         ks_tail_radial = 1.0
 
     wandb.log({f"eval/tail_ks_radial_{target_name}": ks_tail_radial}, step=step)
+
+    # =====================================================================
+    # 5.1. SLICED WASSERSTEIN-1 (SW1)
+    # =====================================================================
+    # 500 random projection directions sampled uniformly on the unit sphere.
+    # Computed by sorting and matching the projected samples.
+    n_projections_sw1 = 500
+    
+    # Projection directions sampled from the current PyTorch RNG state.
+    dirs_sw1 = torch.randn(dim, n_projections_sw1, device=device)
+    dirs_sw1 = dirs_sw1 / dirs_sw1.norm(dim=0, keepdim=True)
+    
+    proj_gen_sw1 = torch.matmul(curr_x_gen_global, dirs_sw1)
+    proj_gt_sw1 = torch.matmul(curr_gt_global, dirs_sw1)
+    
+    proj_gen_sw1_sorted, _ = torch.sort(proj_gen_sw1, dim=0)
+    proj_gt_sw1_sorted, _ = torch.sort(proj_gt_sw1, dim=0)
+    
+    sliced_w1 = torch.abs(proj_gen_sw1_sorted - proj_gt_sw1_sorted).mean().item()
+    wandb.log({f"eval/sliced_w1_{target_name}": sliced_w1}, step=step)
+
+    # =====================================================================
+    # 5.2 ANGULAR SLICED WASSERSTEIN (ASW)
+    # =====================================================================
+    # Samples are partitioned into 4 radial bins defined by the test-set radial quantiles.
+    n_projections_asw = 200
+    n_bins = 4
+    
+    r_gen_global = curr_x_gen_global.norm(dim=1)
+    r_gt_global = curr_gt_global.norm(dim=1)
+    
+    # Test-set (GT) radial quantiles define the bins.
+    quantiles = torch.tensor([0.25, 0.5, 0.75], device=device)
+    bin_edges = torch.quantile(r_gt_global, quantiles)
+    bin_edges = torch.cat([torch.tensor([0.0], device=device), bin_edges, torch.tensor([float('inf')], device=device)])
+    
+    asw_total = 0.0
+    valid_bins = 0
+    
+    for i in range(n_bins):
+        mask_gen = (r_gen_global >= bin_edges[i]) & (r_gen_global < bin_edges[i+1])
+        mask_gt = (r_gt_global >= bin_edges[i]) & (r_gt_global < bin_edges[i+1])
+        
+        bin_gen = curr_x_gen_global[mask_gen]
+        bin_gt = curr_gt_global[mask_gt]
+        
+        if len(bin_gen) == 0 or len(bin_gt) == 0:
+            continue
+            
+        # Vectors are normalized to unit norm; norms clamped to a minimum of 10^-12.
+        bin_gen_norm = bin_gen / torch.clamp(bin_gen.norm(dim=1, keepdim=True), min=1e-12)
+        bin_gt_norm = bin_gt / torch.clamp(bin_gt.norm(dim=1, keepdim=True), min=1e-12)
+        
+        # Angular sliced Wasserstein computed with 200 random projections.
+        dirs_asw = torch.randn(dim, n_projections_asw, device=device)
+        dirs_asw = dirs_asw / dirs_asw.norm(dim=0, keepdim=True)
+        
+        proj_gen_asw, _ = torch.sort(torch.matmul(bin_gen_norm, dirs_asw), dim=0)
+        proj_gt_asw, _  = torch.sort(torch.matmul(bin_gt_norm, dirs_asw), dim=0)
+        
+        # Helper to compute 1D W1 for unequal bin sizes via quantile interpolation
+        N, M = proj_gen_asw.shape[0], proj_gt_asw.shape[0]
+        K = max(N, M)
+        idx_gen = torch.linspace(0, N - 1, K, device=device).long()
+        idx_gt = torch.linspace(0, M - 1, K, device=device).long()
+        
+        bin_asw = torch.abs(proj_gen_asw[idx_gen] - proj_gt_asw[idx_gt]).mean().item()
+        asw_total += bin_asw
+        valid_bins += 1
+
+    final_asw = asw_total / valid_bins if valid_bins > 0 else float('nan')
+    wandb.log({f"eval/angular_sw_{target_name}": final_asw}, step=step)
+    
+    # ---------------------------------------------------------
+    # 4. PLOTTING (Generated + Target Space)
+    # ---------------------------------------------------------
     if target_name in {"funnel", "nealfunnel"}:
         plot.plot_funnel_tail_ccdf(args, raw_sampler, x_gen_raw.norm(dim=1), step = step, filename="funnel_ccdf", key="tail_ccdf")
         plot.plot_funnel_2d(x_gen_raw, raw_sampler, step, big_eval, output_dir)
@@ -398,10 +474,19 @@ def heavy_eval_batched(
         plot.plot_pareto_2d(x_gen_raw, sampler, step, big_eval, output_dir)
     elif target_name == "thinangles":
         plot.plot_thin_angles(x_gen_raw, sampler, step, big_eval, output_dir)
+    elif target_name == "toycross":
+        plot.plot_toy2d_cross(x_gen_raw, sampler, step, big_eval, output_dir)
     else:
         plot.plot_generic_2d(x_gen, sampler, step, big_eval, output_dir)
-    #print(funnel_eval.evaluate_x2_marginal_metrics(x_gen))
     
+    # === NEU: 2D Plotting exklusiv für den Target Space ===
+    # Zieht 100k echte Target-Samples und plottet diese zur Referenz
+    num_target_plot = 100000
+    target_100k = _fixed_ground_truth(args, sampler, False, num_target_plot, device=device)
+    # Ergänze den 'step'-Parameter um "_target", um die Datei im Output von den generierten zu trennen
+    plot.plot_toy2d_cross(target_100k, sampler, step, big_eval, output_dir)
+    # =======================================================
+
     # New: latent colored by norm of reached target x
     if eps_kept is not None:
         plot.plot_latent_colored_by_target_norm(eps_kept, x_gen_raw, step, output_dir, big_eval=big_eval)

@@ -653,6 +653,100 @@ def plot_generic_2d(
 
     plt.close()
 
+def plot_toy2d_cross(
+        generated,
+        sampler,
+        step,
+        big_eval=False,
+        path=None
+    ):
+    """
+    Custom 2D plotting for the Toy2DCross heavy-tailed distribution.
+    - No density background
+    - Scatter of generated samples overlaid with true samples
+    - Top/right marginals as hist overlays (data red outline, model filled teal)
+    - Adaptive symmetric limits from percentiles to avoid Student-t outliers dominating
+    - Safely handles string or int for 'step'
+    """
+    
+    n_data = generated.shape[0]
+    # Ziehe echte Target-Samples
+    S_data = sampler.sample(n_data)
+
+    # Konvertierung zu Numpy (für x und y Dimensionen)
+    x_gen = generated[:, 0].cpu().numpy() if isinstance(generated, torch.Tensor) else generated[:, 0]
+    y_gen = generated[:, 1].cpu().numpy() if isinstance(generated, torch.Tensor) else generated[:, 1]
+
+    x_true = S_data[:, 0].cpu().numpy() if isinstance(S_data, torch.Tensor) else S_data[:, 0]
+    y_true = S_data[:, 1].cpu().numpy() if isinstance(S_data, torch.Tensor) else S_data[:, 1]
+
+    # --- Adaptive Limits für Heavy Tails (Student-t) ---
+    # Wir nehmen das 99.9. Perzentil, um die weiten Ausläufer der Student-t 
+    # Verteilung zu zeigen, ohne dass ein einzelner extremer Ausreißer alles ruiniert.
+    all_x = np.concatenate([x_gen, x_true])
+    all_y = np.concatenate([y_gen, y_true])
+    
+    max_val = np.percentile(np.abs(np.concatenate([all_x, all_y])), 99.99)
+    
+    # Deutlich weiter herausgezoomt: Mindestens [-15, 15]
+    max_val = max(25.0, max_val) 
+    
+    lim = (-max_val, max_val)
+    bins = np.linspace(lim[0], lim[1], 80)
+
+    # --- Setup GridSpec ---
+    fig = plt.figure(figsize=(8, 8), dpi=160)
+    GAP = 0.05
+    gs = GridSpec(4, 4, figure=fig, hspace=GAP, wspace=GAP)
+    ax_main  = fig.add_subplot(gs[1:, :3])
+    ax_top   = fig.add_subplot(gs[0, :3], sharex=ax_main)
+    ax_right = fig.add_subplot(gs[1:, 3], sharey=ax_main)
+
+    teal = "#7fb8c8"
+    red  = "#e74c3c"
+
+    # --- Main Scatter ---
+    # Target in Rot (unten), Generiert in Teal (darüber)
+    ax_main.scatter(x_true, y_true, s=4, alpha=0.25, color=red, linewidths=0, edgecolors="none", rasterized=True, label="Target")
+    ax_main.scatter(x_gen, y_gen, s=6, alpha=0.4, color=teal, linewidths=0, edgecolors="none", rasterized=True, label="Generated")
+    ax_main.set_xlabel(r"$x_1$")
+    ax_main.set_ylabel(r"$x_2$")
+    ax_main.set_xlim(lim)
+    ax_main.set_ylim(lim)
+    ax_main.legend(loc="upper left")
+
+    # --- Top Hist (Marginal X) ---
+    ax_top.hist(x_true, bins=bins, density=True, histtype="step", color=red, linewidth=2.0)
+    ax_top.hist(x_gen, bins=bins, density=True, color=teal, alpha=0.35, edgecolor=teal)
+    ax_top.tick_params(labelbottom=False)
+
+    # --- Right Hist (Marginal Y) ---
+    ax_right.hist(y_gen, bins=bins, density=True, orientation="horizontal", color=teal, alpha=0.35, edgecolor=teal)
+    ax_right.hist(y_true, bins=bins, density=True, orientation="horizontal", histtype="step", color=red, linewidth=2.0)
+    ax_right.tick_params(labelleft=False)
+    ax_right.set_xlabel(r"$p(x_2)$")
+
+    # --- Safe Step Formatting (Behebt den ValueError bei f"{step}_target") ---
+    if isinstance(step, int):
+        step_str = f"{step:03d}"
+    else:
+        step_str = str(step)
+
+    # 1. Speichere PDF
+    if path is not None:
+        os.makedirs(path, exist_ok=True)
+        pdf_path = os.path.join(path, f'samples_epoch_{step_str}.pdf')
+        plt.savefig(pdf_path, bbox_inches='tight')
+
+        # 2. Speichere PNG & Logge zu WandB
+        png_path = os.path.join(path, f'samples_epoch_{step_str}.png')
+        plt.savefig(png_path, bbox_inches='tight') 
+
+        log_key = "eval/scatter_plot_big" if big_eval else "eval/scatter_plot"
+        wandb.log({f"{log_key}_toy2d_cross": wandb.Image(png_path)}, step=step if isinstance(step, int) else None)
+
+    plt.close()
+
 def plot_thin_angles(
         generated,
         sampler,
