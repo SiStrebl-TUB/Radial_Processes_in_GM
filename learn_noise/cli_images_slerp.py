@@ -26,24 +26,50 @@ def _build_unet(args: SimpleNamespace) -> torch.nn.Module:
 
     dataset = args.target_dataset.lower()
     
-    # === HIER HABE ICH msgm_piv HINZUGEFÜGT ===
     if dataset in {"cifar10", "cifar", "cifar-10", "msgm_piv"}:
-        model_channels = int(getattr(args, "unet_model_channels", 64)) # Für 1-Kanal PIV auf 64 (statt 128) reduziert, damit es schneller trainiert
-        channel_mult = tuple(getattr(args, "unet_channel_mult", (1, 2, 2, 2)))
+        # 1. Tatsächliche räumliche Auflösung ablesen (z.B. 32, 16, 8, 4)
+        img_size = image_shape[-1]
+        
+        # 2. Dynamische Defaults basierend auf der Gittergröße festlegen
+        if img_size >= 32:
+            print("Using default U-Net settings for 32x32 images.")
+            default_channels = 64
+            default_mult = (1, 2, 2, 2)  # 32 -> 16 -> 8 -> 4
+            default_attn = (16,)         # Attention auf 16x16
+        elif img_size == 16:
+            print("Using default U-Net settings for 16x16 images.")
+            default_channels = 64
+            default_mult = (1, 2, 2)     # 16 -> 8 -> 4
+            default_attn = (8,)          # Attention auf 8x8
+        elif img_size == 8:
+            print("Using default U-Net settings for 8x8 images.")
+            default_channels = 32        # Weniger Parameter für so kleine Netze
+            default_mult = (1, 2)        # 8 -> 4
+            default_attn = (4,)          # Attention auf 4x4
+        else: # <= 4x4
+            print("Using default U-Net settings for 4x4 images.")
+            default_channels = 32
+            default_mult = (1, 2)        # 4 -> 2
+            default_attn = (2,)          # Attention auf 2x2
+            
+        # 3. Argumente laden (greift auf die dynamischen Defaults zurück, falls nicht in args überschrieben)
+        model_channels = int(getattr(args, "unet_model_channels", default_channels)) 
+        channel_mult = tuple(getattr(args, "unet_channel_mult", default_mult))
         num_res_blocks = int(getattr(args, "unet_num_res_blocks", 2))
-        attention_resolutions = tuple(getattr(args, "unet_attention_resolutions", (16,)))
+        attention_resolutions = tuple(getattr(args, "unet_attention_resolutions", default_attn))
+        
         num_heads = int(getattr(args, "unet_num_heads", 4))
         num_head_channels = int(getattr(args, "unet_num_head_channels", 64))
         dropout = float(getattr(args, "unet_dropout", 0.1))
         
-        # Flexibler Input-Kanal (holt die '1' aus image_shape [1, 32, 32])
+        # Flexibler Input-Kanal (holt die '1' aus image_shape [1, res, res])
         in_channels = int(getattr(args, "unet_in_channels", image_shape[0]))
         out_channels = int(getattr(args, "unet_out_channels", in_channels))
         
         base_model = UNetModel(
             in_channels=in_channels,
             out_channels=out_channels,
-            image_size=image_shape[-1],
+            image_size=img_size,
             model_channels=model_channels,
             channel_mult=channel_mult,
             num_res_blocks=num_res_blocks,
