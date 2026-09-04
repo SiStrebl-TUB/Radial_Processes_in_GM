@@ -410,7 +410,6 @@ def preprocessing(xtest, xs_forward, num_steps_forward, name_simu_root,
             plot_signal(xs_forward, inds_forward, prefix_save, std_norm=std_norm,
                         std_test_plot=std_test_plot, plt_show=plt_show, timeToDuplicate=0)
 
-
 def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_run, MSGM, sampler,
                    xs, xtest, std_norm, std_test_plot, datatype, name_simu, dimplot,
                    crop_data_plot, plot_crop, plot_xlim, plot_ref_pdf,
@@ -423,6 +422,13 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     xgen = xs[-1, :, :].to(device)
 
     import os
+    
+    # --- DYNAMISCHE DIMENSION BERECHNEN ---
+    # Nimmt an, dass die Daten flache Vektoren sind, deren Länge ein perfektes Quadrat ist.
+    vec_len = xtest.shape[1]
+    grid_size = int(np.sqrt(vec_len))
+    if grid_size * grid_size != vec_len:
+        print(f"WARNUNG: Daten-Dimension {vec_len} ist kein perfektes Quadrat. Reshape wird fehlschlagen!")
 
     # =================================================================
     # DIAGNOSE: Wie viele der 1000 Samples sind eigentlich kaputt?
@@ -432,7 +438,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     
     smoothness_list = []
     for j in range(xgen_np.shape[0]):
-        img = xgen_np[j].reshape((32, 32), order='F')
+        img = xgen_np[j].reshape((grid_size, grid_size), order='F')
         diff_y = np.mean(np.abs(img[1:, :] - img[:-1, :]))
         diff_x = np.mean(np.abs(img[:, 1:] - img[:, :-1]))
         smoothness_list.append((diff_x + diff_y) / 2.0)
@@ -456,7 +462,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
     print("-----------------------------\n")
     
     print("\n" + "*" * 70)
-    print("=== REDUCED SANITY CHECK: 1 Sample, Order F only ===")
+    print(f"=== REDUCED SANITY CHECK: 1 Sample ({grid_size}x{grid_size}), Order F only ===")
     
     debug_dir = os.path.abspath("DEBUG_SanityCheck")
     os.makedirs(debug_dir, exist_ok=True)
@@ -475,7 +481,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         
         # --- Echte Testdaten (xtest) ---
         test_vec = xtest[i].detach().cpu().numpy()
-        test_img_f = test_vec.reshape((32, 32), order='F')
+        test_img_f = test_vec.reshape((grid_size, grid_size), order='F')
         
         plots_vort(test_img_f, vmin=-2, vmax=2)
         plt.savefig(os.path.join(debug_dir, f"DEBUG_Test_Sample{i}_OrderF.png"))
@@ -483,7 +489,7 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
 
         # --- Generierte Daten am ENDE der SDE (xs[-1]) ---
         gen_end_vec = xs[-1, i, :].detach().cpu().numpy()
-        gen_end_img_f = gen_end_vec.reshape((32, 32), order='F')
+        gen_end_img_f = gen_end_vec.reshape((grid_size, grid_size), order='F')
         
         plots_vort(gen_end_img_f, vmin=-2, vmax=2)
         plt.savefig(os.path.join(debug_dir, f"DEBUG_Gen_Step-1_Sample{i}_OrderF.png"))
@@ -497,9 +503,6 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         print(f"  GEN Bild [-1] -> Mean: {gen_end_vec.mean():.4f} | Smoothness (Gradient): {smooth_end:.4f}")
         
     print("*" * 70 + "\n")
-
-    if save_results and not justLoad:
-        np.save(name_simu + ".npy", xgen.clone().detach().cpu().numpy())
 
     if save_results and not justLoad:
         np.save(name_simu + ".npy", xgen.clone().detach().cpu().numpy())
@@ -693,8 +696,8 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
         os.makedirs(temp_dir, exist_ok=True)
         
         for i, step in enumerate(frame_indices):
-            # Zeitschritt in 32x32 Bild umwandeln
-            img_f = trajectory[step].reshape((32, 32), order='F')
+            # Zeitschritt in dynamisches Bild umwandeln
+            img_f = trajectory[step].reshape((grid_size, grid_size), order='F')
             
             plots_vort(img_f, vmin=-2, vmax=2)
             

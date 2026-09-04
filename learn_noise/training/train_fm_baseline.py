@@ -1172,7 +1172,8 @@ def train_fm_baseline(
                     # Compute angle omega between x_0 and noise using simplified formula
                     # Since ||x_0|| = ||noise||: cos(omega) = (x_0 · noise) / ||x_0||^2
 
-                    pairing_cost = None
+                    # preserve buffer pairing cost if use_minibatch_ot is true
+                    pairing_cost = locals().get('pairing_cost', None)
 
                     Radius = x0_lognorms ** 2
                     R_true = torch.sqrt(Radius + 1e-8)
@@ -1191,7 +1192,7 @@ def train_fm_baseline(
                     f,g,f_deriv,g_deriv = get_slerp_warped(t, omega, p=p_chosen)
 
                 else:
-                    pairing_cost = None
+                    pairing_cost = locals().get('pairing_cost', None)
                 
                 # Compute trajectory and velocity for all matching methods
                 x_t = f * x_0 + g * noise
@@ -1216,7 +1217,7 @@ def train_fm_baseline(
                 weights = weight_radius * weight_seam
                 weights = weights / weights.mean()
 
-                weights = radius * (2-t)
+                weights = radius
             else:
                 weights = 1.0
             
@@ -1232,10 +1233,17 @@ def train_fm_baseline(
         train_time_accumulator += time.perf_counter() - iter_start
 
         if step % 100 == 0:
+            with torch.no_rad():
+                x_0_unit_curr = torch.nn.functional.normalize(x_0, dim=1)
+                noise_unit_curr = torch.nn.functional.normalize(noise, dim=1)
+                batch_cos = (x_0_unit_curr * noise_unit_curr).sum(dim=1)
+                batch_angular_dist = torch.acos(torch.clamp(batch_cos, -0.999, 0.999)).mean().item()
+
             log_payload = {
                 'loss/velocity': float(loss.item()),
                 'loss/velocity_mse': float(loss_mse.item()),
                 'grad/model_velocity': float(grad_norm.item()),
+                'metrics/batch_angular_distance': float(batch_angular_dist),
             }
             if pairing_cost is not None:
                 log_payload['metrics/minibatch_ot_cost'] = float(pairing_cost)

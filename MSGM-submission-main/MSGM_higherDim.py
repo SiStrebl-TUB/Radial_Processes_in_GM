@@ -105,7 +105,7 @@ match datatype:
     case 'swissroll': # Swiss roll
         dims = [2]
     case 'PIV': # vorticity and divergence from 2D PIV
-        dims = [1024]
+        dims = [256]
         ratio = 4
         beta_max /= ratio # 20/ratio
         beta_min /= ratio
@@ -416,7 +416,7 @@ if __name__ == '__main__':
                                     target_dataset="msgm_piv", 
                                     input_dim=sampler.dim, 
                                     dim=sampler.dim,
-                                    image_shape=[1, 32, 32],      
+                                    image_shape=[1, 16, 16],      
                                     unet_model_channels=64,       
                                     unet_channel_mult=(1, 2, 2, 2),
                                     unet_num_res_blocks=2,
