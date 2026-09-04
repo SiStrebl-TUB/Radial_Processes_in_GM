@@ -14,7 +14,7 @@ time_embedding: sinusoidal
 concat_t_emb: true
 lr: 0.001
 batch_size: 128            # Bei 2D-Toy-Datasets kann man problemlos große Batches (1024) nehmen
-epochs: 100000               # Für ein 2D-Modell reichen meist 20.000 bis 50.000 Iterationen völlig
+epochs: 20000               # Für ein 2D-Modell reichen meist 20.000 bis 50.000 Iterationen völlig
 model_grad_clip: 1.0
 ema: 0.999
 ema_start_step: 0

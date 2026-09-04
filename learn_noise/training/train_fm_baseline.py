@@ -1110,7 +1110,7 @@ def train_fm_baseline(
 
                 if use_minibatch_ot:
                     # Parameter für den Puffer dynamisch setzen
-                    ot_buf_size = getattr(args, "ot_buffer_size", 4096)
+                    ot_buf_size = getattr(args, "ot_buffer_size", 1024)
                     chunk_steps = max(1, ot_buf_size // args.batch_size)
 
                     # 2. Puffer füllen (nur alle 32 Schritte)
