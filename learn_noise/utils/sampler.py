@@ -1976,7 +1976,7 @@ class MSGM_PIV(BaseDistribution2D):
 
     def __init__(
         self, 
-        dim: int = 1024, 
+        dim: int = 256, 
         normalized: bool = False
     ):
         self.normalized = normalized
