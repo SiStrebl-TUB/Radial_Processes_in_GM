@@ -1233,7 +1233,7 @@ def train_fm_baseline(
         train_time_accumulator += time.perf_counter() - iter_start
 
         if step % 100 == 0:
-            with torch.no_rad():
+            with torch.no_grad():
                 x_0_unit_curr = torch.nn.functional.normalize(x_0, dim=1)
                 noise_unit_curr = torch.nn.functional.normalize(noise, dim=1)
                 batch_cos = (x_0_unit_curr * noise_unit_curr).sum(dim=1)
