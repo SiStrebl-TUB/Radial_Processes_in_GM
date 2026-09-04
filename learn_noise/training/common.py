@@ -186,56 +186,43 @@ def spherical_ot_pairing(set_a: torch.Tensor, set_b: torch.Tensor):
     
     return permuted_indices, plan
 
+
 def max_sliced_ot_pairing(
     x: torch.Tensor, 
     y: torch.Tensor, 
     num_iterations: int = 15, 
     lr: float = 0.5
 ) -> torch.Tensor:
-    """
-    Findet die optimale 1D-Projektionsachse zur Trennung der Verteilungen und 
-    gibt die entsprechenden Coupling-Indizes zurück.
-    
-    Args:
-        x: Source-Batch (z. B. Target-Daten auf der Sphäre) der Form (B, d)
-        y: Target-Batch (z. B. Noise-Daten auf der Sphäre) der Form (B, d)
-        num_iterations: Anzahl der Gradient-Ascent Schritte für die Achse
-        lr: Lernrate für die Achsen-Optimierung
-    """
     B, d = x.shape
     device = x.device
 
-    # Initialisiere zufällige Projektionsachse auf der Einheitssphäre
-    theta = torch.randn(d, 1, device=device)
-    theta = F.normalize(theta, p=2, dim=0)
-    theta.requires_grad_(True)
+    # Überschreibt ein eventuelles torch.no_grad() der übergeordneten Funktion
+    with torch.enable_grad():
+        theta = torch.randn(d, 1, device=device)
+        theta = F.normalize(theta, p=2, dim=0)
+        theta.requires_grad_(True)
 
-    # Wir nutzen SGD, da wir nur diesen einen Vektor updaten
-    optimizer = torch.optim.SGD([theta], lr=lr)
+        optimizer = torch.optim.SGD([theta], lr=lr)
 
-    # Gradient Ascent, um die W2-Distanz auf der Achse zu maximieren
-    for _ in range(num_iterations):
-        optimizer.zero_grad()
-        
-        # 1D-Projektionen
-        u = torch.matmul(x, theta).squeeze(1)
-        v = torch.matmul(y, theta).squeeze(1)
-        
-        # Sortieren
-        u_sorted, _ = torch.sort(u)
-        v_sorted, _ = torch.sort(v)
-        
-        # W2-Distanz berechnen (negativ für Maximierung via Gradient Descent)
-        loss = -torch.mean((u_sorted - v_sorted) ** 2)
-        
-        loss.backward()
-        optimizer.step()
-        
-        # Achse nach jedem Schritt wieder auf die Sphäre normieren
-        with torch.no_grad():
-            theta.copy_(F.normalize(theta, p=2, dim=0))
+        for _ in range(num_iterations):
+            optimizer.zero_grad()
+            
+            u = torch.matmul(x, theta).squeeze(1)
+            v = torch.matmul(y, theta).squeeze(1)
+            
+            u_sorted, _ = torch.sort(u)
+            v_sorted, _ = torch.sort(v)
+            
+            loss = -torch.mean((u_sorted - v_sorted) ** 2)
+            
+            loss.backward()
+            optimizer.step()
+            
+            # Normalisierung der Achse darf nicht in den Graphen einfließen
+            with torch.no_grad():
+                theta.copy_(F.normalize(theta, p=2, dim=0))
 
-    # Finales Coupling mit der optimierten Achse (ohne Gradienten)
+    # Finales Coupling benötigt keine Gradienten mehr
     with torch.no_grad():
         u_final = torch.matmul(x, theta).squeeze(1)
         v_final = torch.matmul(y, theta).squeeze(1)
@@ -243,7 +230,6 @@ def max_sliced_ot_pairing(
         _, idx_x = torch.sort(u_final)
         _, idx_y = torch.sort(v_final)
         
-        # Zuweisungs-Array konstruieren: x[idx] wird y[idx_y] zugeordnet
         idx_best = torch.empty(B, dtype=torch.long, device=device)
         idx_best[idx_x] = idx_y
         
