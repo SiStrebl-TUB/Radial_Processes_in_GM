@@ -73,7 +73,7 @@ print_every = 10000
 
 # Inference
 include_t0_reverse = True # for plots
-num_samples = 2500
+num_samples = 1000
 max_num_samples_for_mmd = num_samples
 evalmmmd = True
 first_run = True
@@ -338,7 +338,7 @@ if __name__ == '__main__':
                                 iterations = max([1,iterations])
                             else:  
                                 iterations = iterations_ref
-                            num_samples_init = 2500 
+                            num_samples_init = 1000 
                         
                             drift_q = MLP(input_dim=sampler.dim, index_dim=1, hidden_dim=128, premodule = premodule).to(device)
                             T = torch.nn.Parameter(torch.FloatTensor([T0]), requires_grad=False)
@@ -386,20 +386,43 @@ if __name__ == '__main__':
                                 
                                 def _build_unet_local(args: SimpleNamespace) -> torch.nn.Module:
                                     image_shape = tuple(args.image_shape)
-                                    model_channels = int(getattr(args, "unet_model_channels", 64))
-                                    channel_mult = tuple(getattr(args, "unet_channel_mult", (1, 2, 2, 2)))
+                                    img_size = image_shape[-1]
+                                    
+                                    # 1. Dynamische Defaults basierend auf der Gittergröße
+                                    if img_size >= 32:
+                                        default_channels = 64
+                                        default_mult = (1, 2, 2, 2)  # 32 -> 16 -> 8 -> 4
+                                        default_attn = (16,)         # Attention auf 16x16
+                                    elif img_size == 16:
+                                        default_channels = 64
+                                        default_mult = (1, 2, 2)     # 16 -> 8 -> 4
+                                        default_attn = (8,)          # Attention auf 8x8
+                                    elif img_size == 8:
+                                        default_channels = 32
+                                        default_mult = (1, 2)        # 8 -> 4
+                                        default_attn = (4,)          # Attention auf 4x4
+                                    else: # <= 4x4
+                                        default_channels = 32
+                                        default_mult = (1, 2)        # 4 -> 2
+                                        default_attn = (2,)          # Attention auf 2x2
+
+                                    # 2. Argumente laden (greift auf Defaults zurück, wenn in args nicht definiert)
+                                    model_channels = int(getattr(args, "unet_model_channels", default_channels))
+                                    channel_mult = tuple(getattr(args, "unet_channel_mult", default_mult))
                                     num_res_blocks = int(getattr(args, "unet_num_res_blocks", 2))
-                                    attention_resolutions = tuple(getattr(args, "unet_attention_resolutions", (16,)))
+                                    attention_resolutions = tuple(getattr(args, "unet_attention_resolutions", default_attn))
+                                    
                                     num_heads = int(getattr(args, "unet_num_heads", 4))
                                     num_head_channels = int(getattr(args, "unet_num_head_channels", 64))
                                     dropout = float(getattr(args, "unet_dropout", 0.1))
+                                    
                                     in_channels = int(getattr(args, "unet_in_channels", image_shape[0]))
                                     out_channels = int(getattr(args, "unet_out_channels", in_channels))
 
                                     base_model = UNetModel(
                                         in_channels=in_channels,
                                         out_channels=out_channels,
-                                        image_size=image_shape[-1],
+                                        image_size=img_size,
                                         model_channels=model_channels,
                                         channel_mult=channel_mult,
                                         num_res_blocks=num_res_blocks,
@@ -412,15 +435,19 @@ if __name__ == '__main__':
                                     device = torch.device(args.device)
                                     return VelocityFieldAdapter(base_model.to(device), image_shape).to(device)
                                 
+                                # Gittergröße dynamisch aus der Dimension des Samplers berechnen
+                                grid_size = int(sampler.dim**0.5)
+
                                 args = SimpleNamespace(
                                     target_dataset="msgm_piv", 
                                     input_dim=sampler.dim, 
                                     dim=sampler.dim,
-                                    image_shape=[1, 16, 16],      
-                                    unet_model_channels=64,       
-                                    unet_channel_mult=(1, 2, 2, 2),
+                                    image_shape=[1, grid_size, grid_size], # Automatisch [1, 16, 16] bei dim=256
+                                    
+                                    # Optional: Wir definieren hier nur die globalen Architektur-Settings.
+                                    # channel_mult und attention_resolutions lassen wir absichtlich weg, 
+                                    # damit _build_unet_local die optimierten Defaults anhand der image_shape wählt.
                                     unet_num_res_blocks=2,
-                                    unet_attention_resolutions=(16,),
                                     unet_num_heads=4,
                                     unet_num_head_channels=64,
                                     unet_dropout=0.1,
