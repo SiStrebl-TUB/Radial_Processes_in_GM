@@ -460,14 +460,14 @@ if __name__ == '__main__':
 
                                 # Modelle instanziieren und wrappen
                                 fm_model_test = _build_unet_local(args)
-                                fm_model_test_msot = _build_unet_local(args)
+                                fm_model_test_sot = _build_unet_local(args)
 
                                 fm_model_test = _load_and_clean_weights(fm_model_test, "ema_test.pt", device)
-                                fm_model_test_msot = _load_and_clean_weights(fm_model_test_msot, "ema_test_msot.pt", device)
+                                fm_model_test_sot = _load_and_clean_weights(fm_model_test_sot, "ema_test_sot.pt", device)
                                 
                                 gen_sdes = {
                                     "baseline_test": _wrap_model(fm_model_test, args, device, sampler),
-                                    "ot_coupled_test_msot": _wrap_model(fm_model_test_msot, args, device, sampler)
+                                    "ot_coupled_test_sot": _wrap_model(fm_model_test_sot, args, device, sampler)
                                 }
                                 # Fallback für alte Variablen im Code
                                 gen_sde = gen_sdes["baseline_test"]
