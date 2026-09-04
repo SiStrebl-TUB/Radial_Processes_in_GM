@@ -1,18 +1,18 @@
 # Angepasste joint-training configuration für 2D Toy Dataset (MLP)
 seed: 1
 device: cuda
-target_dataset: toycross   # WICHTIG: Ersetze das durch den String, unter dem du die Klasse registrierst
-dim: 2                      # Zwingend 2 für das 2D-Dataset
+target_dataset: msgm_piv   # WICHTIG: Ersetze das durch den String, unter dem du die Klasse registrierst
+dim: 1024                      # Zwingend 2 für das 2D-Dataset
 
 # === ÄNDERUNGEN FÜR DAS MLP ===
-hidden_size: 64             # Wieder auf 64 (oder 128) setzen für MLP
-hidden_layers: 3            # Wieder auf 3 (oder 4) setzen für MLP
-image_shape: null           # Wieder null, da MLPs flache Vektoren erwarten, keine 2D-Bilder
+hidden_size: 0             # Wieder auf 64 (oder 128) setzen für MLP
+hidden_layers: 0            # Wieder auf 3 (oder 4) setzen für MLP
+image_shape: [1, 32, 32]           # Wieder null, da MLPs flache Vektoren erwarten, keine 2D-Bilder
 # ================================
 
 time_embedding: sinusoidal
 concat_t_emb: true
-lr: 0.002
+lr: 0.001
 batch_size: 128            # Bei 2D-Toy-Datasets kann man problemlos große Batches (1024) nehmen
 epochs: 100000               # Für ein 2D-Modell reichen meist 20.000 bis 50.000 Iterationen völlig
 model_grad_clip: 1.0
@@ -20,7 +20,7 @@ ema: 0.999
 ema_start_step: 0
 
 strat_ot: false 
-use_minibatch_ot: false     # minibatch OT for linear FM models
+use_minibatch_ot: true     # minibatch OT for linear FM models
 slerp: true
 baseline_flow: target_norm_emp # Target-Norm bleibt, um das Sphären-Verhalten zu testen
 baseline_latent: gaussian
@@ -36,7 +36,7 @@ freeze_quantile: false
 eval_step: 50000             # Öfter evaluieren, da das Training viel schneller durchläuft
 eval_sample: 10000
 eval_batch: 10000
-big_eval_samples: 1000000
+big_eval_samples: 100000
 big_eval_step: 50000
 num_steps_eval: 100
 name: null

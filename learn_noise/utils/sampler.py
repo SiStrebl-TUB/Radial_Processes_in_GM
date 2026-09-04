@@ -2077,7 +2077,7 @@ class MSGM_PIV(BaseDistribution2D):
 class Toy2DCross(BaseDistribution2D):
     has_log_prob: bool = False
 
-    def __init__(self, scale: float = 1.0, kappa: float = 5.0, nu: float = 3.0):
+    def __init__(self, scale: float = 1.0, kappa: float = 100.0, nu: float = 3.0):
         # Basis-Parameter
         self.dim = 2
         self.scale = scale

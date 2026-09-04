@@ -29,7 +29,8 @@ from learn_noise.training.common import (
     write_model_size_summary,
     spherical_ot_pairing,
     oversample_heavy_tails,
-    sliced_ot_pairing
+    sliced_ot_pairing,
+    max_sliced_ot_pairing
 )
 from learn_noise.training.logging import (
     log_baseline_evaluation,
@@ -1138,7 +1139,7 @@ def train_fm_baseline(
 
                             # C. Sliced OT über den 4096er Puffer ausführen
                             x_0_unit_buf = torch.nn.functional.normalize(x_0_buf, dim=1)
-                            idx_best = sliced_ot_pairing(x_0_unit_buf, noise_unit_buf)
+                            idx_best = max_sliced_ot_pairing(x_0_unit_buf, noise_unit_buf)
                             
                             # D. Paare zusammenfügen und global abspeichern
                             matched_noise_unit = noise_unit_buf[idx_best]
