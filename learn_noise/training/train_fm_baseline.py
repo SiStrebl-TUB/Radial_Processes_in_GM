@@ -334,7 +334,6 @@ def train_fm_baseline(
         else:
             n_eval_samples = 25000 
             print(f"[baseline] Sampler does not have real samples in RAM. Using {n_eval_samples} samples for norm estimation.")
-        n_eval_samples = 1000000 # Cap at 100k for memory reasons
             
         print(f"Sampling {n_eval_samples} points for target norm estimation...")
         
