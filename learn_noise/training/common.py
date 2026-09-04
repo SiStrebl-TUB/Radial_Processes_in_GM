@@ -8,6 +8,7 @@ from typing import Callable, Dict, Optional, Tuple
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 try:
     import ot  # type: ignore
