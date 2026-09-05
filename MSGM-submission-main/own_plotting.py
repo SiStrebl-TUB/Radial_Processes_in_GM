@@ -616,8 +616,8 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
                     "KS_Base": ks_stat_baseline,
                     "KS_Mod": ks_stat,
                     # Raw Items (ohne sqrt) für die globalen Arrays
-                    "raw_mmd_base": dist_train_to_test.item(),
-                    "raw_mmd_mod": dist_gen_to_test.item()
+                    "raw_mmd_base": dist_train_to_test,
+                    "raw_mmd_mod": dist_gen_to_test
                 })
 
         # --- 5. Tabelle ausgeben ---
