@@ -2009,10 +2009,10 @@ class MSGM_PIV(BaseDistribution2D):
         raw_data = raw_data[:, :, :, 0]
 
         # Gauß-Filter (smoothing=2 Logik der Autoren)
-        sigmax = npixelx_max // npixelx  # 64 // 32 = 2
+        """sigmax = npixelx_max // npixelx  # 64 // 32 = 2
         raw_data *= 4.0
         for i in range(raw_data.shape[0]):
-            raw_data[i, :, :] = gaussian_filter(raw_data[i, :, :], sigma=sigmax)
+            raw_data[i, :, :] = gaussian_filter(raw_data[i, :, :], sigma=sigmax)"""
 
         # Räumliches Subsampling
         ix = np.linspace(0, raw_data.shape[1]-1, npixelx, dtype=int)
