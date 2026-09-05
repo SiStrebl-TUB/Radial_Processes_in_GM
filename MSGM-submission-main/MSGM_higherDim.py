@@ -29,6 +29,7 @@ from NN import MLP, NormalizeLogRadius, evaluate
 from sde_scheme import euler_maruyama_sampler,heun_sampler,rk4_stratonovich_sampler
 from own_plotting import plot_selected_inds, def_pd, pairplots, pairplots_single, \
                          preprocessing, postprocessing
+from quantitative_comparison import compute_trajectory_metrics
 from SDEs import forward_SDE,SDE,VariancePreservingSDE,PluginReverseSDE,multiplicativeNoise
 from data import SwissRoll,Cauchy,Gaussian,PIV
 import gc
@@ -83,7 +84,7 @@ first_run = True
 ntrain_maxs = [ np.inf ]
 iterationss = [ 2**20]
 num_steps_forward = 16 # default
-num_stepss_backward = [128]
+num_stepss_backward = [10] #128
 nruns_mmd = 1
 fair_comparison = True # comparaison SGM vs MSGM with same RAM usage and same learning time
 ssm_intT_ref = False
@@ -567,11 +568,19 @@ if __name__ == '__main__':
                                             else:
                                                 # MODIFIZIERT: current_gen_sde statt gen_sde verwenden
                                                 x_0 = current_gen_sde.latent_sample(num_samples, sampler.dim)
-                                                xs = rk4_stratonovich_sampler(current_gen_sde, x_0, num_steps_backward, lmbd=lmbd,\
+                                                xs = rk4_stratonovich_sampler(current_gen_sde, x_0, num_steps_backward, lmbd=lmbd,
                                                                             keep_all_samples=True, 
                                                                             include_t0=include_t0_reverse, 
-                                                                            norm_correction = MSGM) 
+                                                                            norm_correction=MSGM) 
                                                 del x_0
+
+                                                # --- METRIKEN BERECHNEN ---
+                                                path_len, kin_energy, min_dist = compute_trajectory_metrics(xs)
+                                                print(f"Modell: {name_simu}")
+                                                print(f"  -> Path Length:     {path_len:.4f} (Theoretisches Minimum: {min_dist:.4f})")
+                                                print(f"  -> Kinetic Energy:  {kin_energy:.4f}")
+                                                # --------------------------
+
                                                 if (save_results):
                                                     torch.save(xs, name_simu + ".pt")
                                                     
