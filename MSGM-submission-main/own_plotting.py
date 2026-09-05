@@ -607,8 +607,8 @@ def postprocessing(inds, i_dims, i_Res, i_num_stepss_backward, i_iterations, i_r
                 # Speichere die Ergebnisse dieses Durchlaufs
                 results_records.append({
                     "Seed": current_seed,
-                    "MMD_Base": dist_train_to_test.sqrt().item(),
-                    "MMD_Mod": dist_gen_to_test.sqrt().item(),
+                    "MMD_Base": dist_train_to_test**0.5,
+                    "MMD_Mod": dist_gen_to_test**0.5,
                     "RadW1_Base": radial_w1_baseline,
                     "RadW1_Mod": radial_w1,
                     "SW1_Base": sliced_w1_baseline,
